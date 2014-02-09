@@ -1,4 +1,5 @@
 {-# LANGUAGE
+  DeriveDataTypeable,
   FlexibleContexts,
   FlexibleInstances,
   GADTs,
@@ -10,38 +11,45 @@
   #-}
 
 module Guia.Debtor
-       ( Debtor,
+       ( -- Debtor
+         Debtor, DebtorId,
+
+         -- Mandate
+         Mandate, MandateId,
+
+         -- SpanishBank
          mkSpanishBank,
-         SpanishBank,
+         SpanishBank, SpanishBankId,
          validSpanishBank,
          validSpanishBankBic,
 
-         runDB
+         -- SpanishBankAccount
+         SpanishBankAccount, SpanishBankAccountId,
+
+         runDB,
+         insertDebtor,
+         cleanDebtors
        ) where
 
 import ClassyPrelude
-import qualified Data.Char as C
+import qualified Data.Char                                                      as CH
   (isDigit, isUpper)
-import Data.Conduit
-  (MonadBaseControl, runResourceT)
-import Data.Conduit.Binary
-import qualified Data.Csv as CSV
-import Data.Csv
-  ((.:))
+import qualified Control.Monad.Trans.Resource                                   as R
+  (MonadBaseControl)
 import Data.Time.Calendar
   (Day)
 import Data.Time.Clock
   (NominalDiffTime)
-import qualified Database.Persist.MongoDB as DB
+import qualified Database.Persist.MongoDB                                       as DB
   (Action, Database, Filter, HostName, Key, PersistEntityBackend,
    PersistMonadBackend, PersistQuery,
    deleteWhere, insert, master, runMongoDBPool, withMongoDBConn)
-import qualified Database.Persist.Quasi as DB
+import qualified Database.Persist.Quasi                                         as DB
   (lowerCaseSettings)
-import qualified Database.Persist.TH as DB
+import qualified Database.Persist.TH                                            as DB
   (mkPersist, persistFileWith, share)
 import Guia.MongoSettings
-import qualified Network as N
+import qualified Network                                                        as N
   (PortID(PortNumber))
 
 DB.share [DB.mkPersist mongoSettings]
@@ -54,37 +62,23 @@ mkSpanishBank fourDigitsCode bic name =
 validSpanishBank :: Text -> Text -> Text -> Bool
 validSpanishBank fourDigitsCode bic name =
      length fourDigitsCode == 4
-  && all C.isDigit fourDigitsCode
+  && all CH.isDigit fourDigitsCode
   && validSpanishBankBic bic
   && length name <= maxSpanishBankName
   where maxSpanishBankName = 100
 
 validSpanishBankBic :: Text -> Bool
 validSpanishBankBic bic =    length bic == 11
-                          && all C.isUpper institution
+                          && all CH.isUpper institution
                           && country == "ES"
                           && all isDigitOrUpper location
                           && all isDigitOrUpper branch
   where (institution, suffix) = splitAt 4 bic
         (country, suffix')    = splitAt 2 suffix
         (location, branch)    = splitAt 2 suffix'
-        isDigitOrUpper c      = C.isDigit c || C.isUpper c
+        isDigitOrUpper c      = CH.isDigit c || CH.isUpper c
 
-instance CSV.FromNamedRecord (Maybe SpanishBank) where
-  parseNamedRecord r = maybeSpanishBank <$> r .: "spanishBankFourDigitsCode"
-                                        <*> r .: "spanishBankBic"
-                                        <*> r .: "spanishBankName"
-    where maybeSpanishBank fourDigitsCode bic name
-            | validSpanishBank fourDigitsCode bic name
-                = Just $ SpanishBank fourDigitsCode bic name
-            | otherwise = Nothing
-
--- spanishBanksFromCsvFile :: (MonadBaseControl IO m)
---                            => FilePath -> m (Either String (CSV.Header, Vector SpanishBank))
--- spanishBanksFromCsvFile filePath = runResourceT $ sourceFile filePath $$
-          --
-
-runDB :: (MonadIO m, MonadBaseControl IO m) => DB.Action m a -> m a
+runDB :: (MonadIO m, R.MonadBaseControl IO m) => DB.Action m a -> m a
 runDB action = DB.withMongoDBConn dbname hostname port Nothing time runAction
   where
     runAction = DB.runMongoDBPool DB.master action
