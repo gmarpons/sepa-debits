@@ -22,7 +22,9 @@ module Guia.CsvImport
 
        ) where
 
-import ClassyPrelude
+import           ClassyPrelude
+import qualified Control.Monad.Trans.Error                                      as E
+  (Error(strMsg))
 import qualified Control.Monad.Trans.State                                      as MS
   (evalStateT, get, modify)
 import qualified Control.Monad.Trans.Resource                                   as R
@@ -33,31 +35,34 @@ import qualified Data.ByteString.Lazy                                           
 import qualified Data.Conduit                                                   as C
   (Source,
    bracketP, yield)
-import Data.Csv
+import           Data.Csv
   ((.:))
 import qualified Data.Csv                                                       as CSV
   (FromNamedRecord(..))
 import qualified Data.Csv.Streaming                                             as CSV
   (Records(Cons, Nil),
    decodeByName)
-import Guia.Debtor
+import           Guia.Debtor
 import qualified System.IO                                                      as IO
   (FilePath, IOMode(ReadMode),
    openFile)
 
 data CsvException
-  = CsvParsingException        String
+  = CsvError                   String -- ^ Generic exception
+  | CsvParsingException        String
   | CsvTypeConversionException String
   | CsvHeaderException         String
   | CsvDataValidationException String
   deriving (Show, Typeable)
 
 instance Exception CsvException
+instance E.Error CsvException where
+  strMsg = CsvError
 
 instance CSV.FromNamedRecord (Maybe SpanishBank) where
-  parseNamedRecord r = maybeSpanishBank <$> r .: "spanishBankFourDigitsCode"
-                                        <*> r .: "spanishBankBic"
-                                        <*> r .: "spanishBankName"
+  parseNamedRecord r = maybeSpanishBank <$> r .: "four_digits_code"
+                                        <*> r .: "bic"
+                                        <*> r .: "name"
     where maybeSpanishBank fourDigitsCode bic name
             | validSpanishBank fourDigitsCode bic name
                 = Just $ mkSpanishBank fourDigitsCode bic name
@@ -82,7 +87,7 @@ sourceCsvFile filePath =
     let eRecords = CSV.decodeByName byteString
     case eRecords of
       Left msg                 -> R.monadThrow (CsvHeaderException msg)
-      Right (_header, records) -> MS.evalStateT (yield' records) (1 :: Int)
+      Right (_header, records) -> MS.evalStateT (yield' records) (1 :: Integer)
   where
     yield' (CSV.Cons (Left  msg)      _ ) = throw' CsvTypeConversionException msg
     yield' (CSV.Cons (Right (Just r)) rs) = lift (C.yield r) >> MS.modify (+1) >> yield' rs
@@ -91,4 +96,7 @@ sourceCsvFile filePath =
     yield' (CSV.Nil  Nothing          _ ) = return ()
     throw' e msg = do
       recordNum <- MS.get
-      R.monadThrow $ e ("Record " ++ show recordNum ++ ": " ++ msg)
+      R.monadThrow $ e ("Line " ++ show recordNum ++ ": " ++ msg)
+
+-- Example of insertion of a CSV file into a Mongo database:
+-- >>> (_ :: [SpanishBank]) <- runResourceDbT $ sourceCsvFile "spanish_banks.csv" $$ CL.iterM DB.insert_ =$ CL.consume

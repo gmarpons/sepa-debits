@@ -1,4 +1,5 @@
 {-# LANGUAGE
+  NoImplicitPrelude,
   TemplateHaskell
   #-}
 
@@ -6,6 +7,7 @@ module Guia.MongoSettings
        ( mongoSettings
        ) where
 
+import           ClassyPrelude
 import qualified Database.Persist.MongoDB                                       as DB
   (MongoBackend)
 import qualified Database.Persist.TH                                            as DB

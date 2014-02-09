@@ -3,23 +3,23 @@ Debtor sql=debtors
   lastName         Text
   activeMandate    Mandate Maybe
   oldMandates      [Mandate]
-  registrationDate Day
+  registrationDate C.Day
   deriving Show Eq Read Ord
 
 Mandate sql=mandates
   reference     Text
   account       SpanishBankAccount
-  signatureDate Day
+  signatureDate C.Day
   -- Unique constraints
   UniqueMandateReference reference
   deriving Show Eq Read Ord
 
-SpanishBankAccount sql=spanishBankAccounts
+SpanishBankAccount sql=spanish_bank_accounts
   iban   Text
   bankId SpanishBankId
   deriving Show Eq Read Ord
 
-SpanishBank sql=spanishBanks
+SpanishBank sql=spanish_banks
   fourDigitsCode Text
   bic            Text       -- ISO 9362 (also known as SWIFT-BIC, SWIFT ID or SWIFT code)
   name           Text

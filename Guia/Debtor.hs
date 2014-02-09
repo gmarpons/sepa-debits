@@ -26,31 +26,25 @@ module Guia.Debtor
          -- SpanishBankAccount
          SpanishBankAccount, SpanishBankAccountId,
 
-         runDB,
          insertDebtor,
          cleanDebtors
        ) where
 
-import ClassyPrelude
+import           ClassyPrelude
 import qualified Data.Char                                                      as CH
   (isDigit, isUpper)
-import qualified Control.Monad.Trans.Resource                                   as R
-  (MonadBaseControl)
-import Data.Time.Calendar
+import qualified Data.Time.Calendar                                             as C
   (Day)
-import Data.Time.Clock
-  (NominalDiffTime)
 import qualified Database.Persist.MongoDB                                       as DB
-  (Action, Database, Filter, HostName, Key, PersistEntityBackend,
+  (Filter, Key, PersistEntityBackend,
    PersistMonadBackend, PersistQuery,
-   deleteWhere, insert, master, runMongoDBPool, withMongoDBConn)
+   deleteWhere, insert)
 import qualified Database.Persist.Quasi                                         as DB
   (lowerCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, persistFileWith, share)
-import Guia.MongoSettings
-import qualified Network                                                        as N
-  (PortID(PortNumber))
+import           Guia.MongoSettings
+import           Guia.MongoUtils
 
 DB.share [DB.mkPersist mongoSettings]
   $(DB.persistFileWith DB.lowerCaseSettings "Guia/Debtor.persistent")
@@ -78,17 +72,8 @@ validSpanishBankBic bic =    length bic == 11
         (location, branch)    = splitAt 2 suffix'
         isDigitOrUpper c      = CH.isDigit c || CH.isUpper c
 
-runDB :: (MonadIO m, R.MonadBaseControl IO m) => DB.Action m a -> m a
-runDB action = DB.withMongoDBConn dbname hostname port Nothing time runAction
-  where
-    runAction = DB.runMongoDBPool DB.master action
-    dbname = "test" :: DB.Database
-    hostname = "localhost" :: DB.HostName
-    port = N.PortNumber 27017 :: N.PortID
-    time = 3600 :: NominalDiffTime -- 1 hour before close connection
-
 insertDebtor :: Debtor -> IO (DB.Key Debtor)
-insertDebtor debtor = runDB $ DB.insert debtor
+insertDebtor debtor = runDb $ DB.insert debtor
 
 cleanDebtors :: (DB.PersistQuery m,
                  DB.PersistEntityBackend Debtor ~ DB.PersistMonadBackend m) => m ()
