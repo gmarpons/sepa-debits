@@ -28,7 +28,6 @@ module Guia.Debtor
          -- SpanishBankAccount
          SpanishBankAccount, SpanishBankAccountId,
          iban,
-         bankId,
          validSpanishBankAccount,
          spanishIbanPrefixFromCcc,
          cccControlDigits,
@@ -47,7 +46,6 @@ module Guia.Debtor
        ) where
 
 import           ClassyPrelude
-import           Control.Lens
 import qualified Data.Char                                                      as CH
   (digitToInt, intToDigit, isDigit, isUpper)
 import qualified Data.Text.Read                                                 as T
@@ -71,16 +69,16 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
   $(DB.persistFileWith DB.lowerCaseSettings "Guia/Debtor.persistent")
 
-validSpanishBankAccount :: Text -> SpanishBank -> Bool
-validSpanishBankAccount iban_ bank =
+validSpanishBankAccount :: Text -> Bool
+validSpanishBankAccount iban_ =
      all CH.isDigit iban_ && length iban_ == 24
   && ibanPrefix == spanishIbanPrefixFromCcc ccc
-  && controlDigits == cccControlDigits bankCode office num
-  && bank ^. fourDigitsCode == bankCode
-  where (ibanPrefix, ccc)    = splitAt 4 iban_
-        (bankCode, suffix)   = splitAt 4 ccc
-        (office, suffix')    = splitAt 4 suffix
-        (controlDigits, num) = splitAt 2 suffix'
+  && controlDigits == cccControlDigits fourDigitsCode_ office num
+  -- && DB.fromPersistValueText (DB.unKey bankId_) == Right fourDigitsCode_
+  where (ibanPrefix, ccc)          = splitAt 4 iban_
+        (fourDigitsCode_, suffix)  = splitAt 4 ccc
+        (office, suffix')          = splitAt 4 suffix
+        (controlDigits, num)       = splitAt 2 suffix'
 
 -- | Pre: 'ccc' contains exactly 20 decimal digits. Returned value contains a 4-character
 -- text, with "ES" prefix followed by 2 decimal digits.
@@ -130,8 +128,7 @@ mkSpanishBank fourDigitsCode_ bic_ bankName_ =
 
 validSpanishBank :: Text -> Text -> Text -> Bool
 validSpanishBank fourDigitsCode_ bic_ bankName_ =
-     length fourDigitsCode_ == 4
-  && all CH.isDigit fourDigitsCode_
+     length fourDigitsCode_ == 4 && all CH.isDigit fourDigitsCode_
   && validSpanishBankBic bic_
   && length bankName_ <= maxBankName
   where maxBankName = 100

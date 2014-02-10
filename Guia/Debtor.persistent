@@ -1,29 +1,34 @@
-Debtor sql=debtors
-  firstName          Text
-  lastName           Text
-  activeMandate      Mandate Maybe
-  oldMandates        [Mandate]
-  registrationDate   C.Day
-  deriving Show Eq Read
+Debtor                        sql=debtors
+  firstName                   Text
+  lastName                    Text
+  activeMandate               Mandate Maybe
+  oldMandates                 [Mandate]
+  registrationDate            C.Day
+  deriving Eq Read Show
 
-Mandate sql=mandates
-  mandateReference   Text
-  account            SpanishBankAccount
-  signatureDate      C.Day
+
+Mandate                       sql=mandates
+  mandateReference            Text
+  account                     SpanishBankAccount
+  signatureDate               C.Day
+
   -- Unique constraints
-  UniqueMandateReference           mandateReference
-  deriving Show Eq Read
+  UniqueMandateReference      mandateReference
+  deriving Eq Read Show
 
-SpanishBankAccount sql=spanish_bank_accounts
-  iban               Text
-  bankId             SpanishBankId
-  deriving Show Eq Read
 
-SpanishBank sql=spanish_banks
-  fourDigitsCode     Text
-  bic                Text      -- ISO 9362 (aka SWIFT-BIC, SWIFT ID or SWIFT code)
-  bankName           Text
+SpanishBankAccount            sql=spanish_bank_accounts
+  iban                        Text
+  --bankId                      SpanishBankId
+  deriving Eq Read Show
+
+
+SpanishBank                   sql=spanish_banks
+  fourDigitsCode              Text
+  bic                         Text   -- ISO 9362 (aka SWIFT-BIC, SWIFT ID or SWIFT code)
+  bankName                    Text
+
   -- Unique constraints
-  UniqueSpanishBankFourDigitsCode  fourDigitsCode
-  UniqueSpanishBankBic             bic
-  deriving Show Eq Read
+  UniqueFourDigitsCode        fourDigitsCode
+  UniqueBic                   bic
+  deriving Eq Read Show
