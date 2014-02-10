@@ -30,6 +30,6 @@ runDb action = DB.withMongoDBConn dbname hostname port Nothing time runAction
     port = N.PortNumber 27017 :: N.PortID
     time = 2 :: C.NominalDiffTime -- 1 hour before close connection
 
-runResourceDbT :: (MonadIO m, R.MonadBaseControl IO m)
-                  => R.ResourceT (DB.Action m) a -> m a
+runResourceDbT :: (MonadIO m, R.MonadBaseControl IO m) =>
+                  R.ResourceT (DB.Action m) a -> m a
 runResourceDbT = runDb . R.runResourceT

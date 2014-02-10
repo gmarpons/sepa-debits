@@ -28,6 +28,7 @@ module Guia.Debtor
          -- SpanishBankAccount
          SpanishBankAccount, SpanishBankAccountId,
          iban,
+         bankId,
          validSpanishBankAccount,
          spanishIbanPrefixFromCcc,
          cccControlDigits,
@@ -46,6 +47,12 @@ module Guia.Debtor
        ) where
 
 import           ClassyPrelude
+import           Control.Lens
+  ((^.))
+import qualified Control.Lens                                                   as L
+  (Conjoined, Contravariant)
+import qualified Control.Lens.Getter                                            as L
+  (to)
 import qualified Data.Char                                                      as CH
   (digitToInt, intToDigit, isDigit, isUpper)
 import qualified Data.Text.Read                                                 as T
@@ -65,9 +72,21 @@ import           Guia.MongoUtils
 import qualified Text.Printf                                                    as PF
   (printf)
 
+-- WARNING: the use of lenses (setters) can violate the invariants of the Abstract Data
+-- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
   $(DB.persistFileWith DB.lowerCaseSettings "Guia/Debtor.persistent")
+
+-- | Getter for a unique key to look for a SpanishBank.
+bankId :: (Functor f, L.Contravariant f, L.Conjoined p) =>
+          p Text (f Text) -> p SpanishBankAccount (f SpanishBankAccount)
+bankId = L.to _bankId
+
+_bankId :: SpanishBankAccount -> Text
+_bankId sba = fourDigitsCode_
+  where (_ibanPrefix, ccc)   = splitAt 4 (sba ^. iban)
+        (fourDigitsCode_, _) = splitAt 4 ccc
 
 validSpanishBankAccount :: Text -> Bool
 validSpanishBankAccount iban_ =

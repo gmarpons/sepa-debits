@@ -73,8 +73,8 @@ instance E.Error CsvException where
 -- used column the same name that is used in 'CSV.parseNamedRecord' for the data type 'o'.
 -- Both @IOException@'s and exceptions related to parsing and converting CSV contents into
 -- values can be thrown.
-sourceCsvFile :: (R.MonadResource m, CSV.FromNamedRecord (Maybe o))
-                 => IO.FilePath -> C.Source m o
+sourceCsvFile :: (R.MonadResource m, CSV.FromNamedRecord (Maybe o)) =>
+                 IO.FilePath -> C.Source m o
 -- bracketP to assure correct resource deallocation. We use package cassava to decode CSV
 -- files, converting all the exceptional situations codified as Either/Maybe into true
 -- exceptions. We use monad State to keep track of the record number we are analyzing and
