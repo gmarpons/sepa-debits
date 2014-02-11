@@ -1,8 +1,18 @@
+MapDebtor                     sql=map_debtors
+  old                         Int
+  new                         DebtorId
+
+  -- Uniqueness constraints
+  UniqueDebtorOld             old
+  UniqueDebtorNew             new
+  deriving Eq Read Show
+
+  
 MapBankAccount                sql=map_bank_accounts
   old                         Int
   new                         SpanishBankAccountId
 
   -- Uniqueness constraints
-  UniqueOld                   old
-  UniqueNew                   new
+  UniqueBankAccountOld        old
+  UniqueBankAccountNew        new
   deriving Eq Read Show

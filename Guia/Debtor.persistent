@@ -3,14 +3,14 @@ Debtor                        sql=debtors
   lastName                    Text
   activeMandate               Mandate Maybe
   oldMandates                 [Mandate]
-  registrationDate            C.Day
+  registrationDate            T.Day
   deriving Eq Read Show
 
 
 Mandate                       sql=mandates
   mandateReference            Text
   account                     SpanishBankAccount
-  signatureDate               C.Day
+  signatureDate               T.Day
 
   -- Unique constraints
   UniqueMandateReference      mandateReference

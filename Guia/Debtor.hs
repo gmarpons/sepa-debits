@@ -12,12 +12,14 @@
 
 module Guia.Debtor
        ( -- Debtor
+         mkDebtor,
          Debtor, DebtorId,
          firstName,
          lastName,
          activeMandate,
          oldMandates,
          registrationDate,
+         validDebtor,
 
          -- Mandate
          Mandate, MandateId,
@@ -56,10 +58,9 @@ import qualified Control.Lens.Getter                                            
   (to)
 import qualified Data.Char                                                      as CH
   (digitToInt, intToDigit, isDigit, isUpper)
-import qualified Data.Text.Read                                                 as T
+import qualified Data.Text.Read                                                 as TXT
   (decimal)
-import qualified Data.Time.Calendar                                             as C
-  (Day)
+import qualified Data.Time.Calendar                                             as T
 import qualified Database.Persist.MongoDB                                       as DB
   (Filter, Key, PersistEntityBackend,
    PersistMonadBackend, PersistQuery,
@@ -73,11 +74,30 @@ import           Guia.MongoUtils
 import qualified Text.Printf                                                    as PF
   (printf)
 
+
 -- WARNING: the use of lenses (setters) can violate the invariants of the Abstract Data
 -- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
   $(DB.persistFileWith DB.lowerCaseSettings "Guia/Debtor.persistent")
+
+
+-- Debtors
+
+mkDebtor :: Text -> Text -> Maybe Mandate -> [Mandate] -> T.Day -> Debtor
+mkDebtor firstName_ lastName_ activeMandate_ oldMandates_ registrationDate_ =
+  assert (validDebtor firstName_ lastName_ activeMandate_ oldMandates_ registrationDate_)
+  $ Debtor firstName_ lastName_ activeMandate_ oldMandates_ registrationDate_
+
+validDebtor :: Text -> Text -> Maybe Mandate -> [Mandate] -> T.Day -> Bool
+validDebtor firstName_ lastName_ _activeMandate_ _oldMandates_ _registrationDate_ =
+     not (null firstName_) && length firstName_ <= maxFirstNameLength
+  && not (null lastName_)  && length lastName_  <= maxLastNameLength
+  where maxFirstNameLength = 40
+        maxLastNameLength  = 40
+
+
+-- Spanish bank accounts
 
 mkSpanishBankAccount :: Text -> SpanishBankAccount
 mkSpanishBankAccount iban_ =
@@ -122,7 +142,7 @@ spanishIbanPrefixFromCcc ccc =
                           | otherwise       -> num
     -- 14 is the code for "E", and "28" is the code for "S", see
     -- http://en.wikipedia.org/wiki/International_Bank_Account_Number#Generating_IBAN_check_digits
-    extendedCccAsEither = T.decimal $ ccc ++ "14" ++ "28" ++ "00"
+    extendedCccAsEither = TXT.decimal $ ccc ++ "14" ++ "28" ++ "00"
 
 -- | Pre: 'bankId' contains exactly 4 decimal digits.
 -- Pre: 'office' contains exactly 4 decimal digits.
@@ -148,6 +168,9 @@ cccControlDigits bankCode office num =
     intToDigit' 11                    = '0'
     intToDigit' x | x >= 0 && x <= 9  = CH.intToDigit x -- would fail with x >= 16
     intToDigit' _x                    = error "cccControlDigits: Int >= 11"
+
+
+-- Spanish banks
 
 mkSpanishBank :: Text -> Text -> Text -> SpanishBank
 mkSpanishBank fourDigitsCode_ bic_ bankName_ =

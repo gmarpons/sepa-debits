@@ -12,12 +12,14 @@
 
 module Guia.CsvImport where
 
-import qualified Prelude
+import qualified Prelude        -- ClassyPrelude.unzip doesn't work
   (unzip)
 
 import           ClassyPrelude
+import qualified Control.Applicative                                            as A
+  (Alternative(..))
 import           Control.Lens
-  ((^.), (&), (.~))
+  ((^.) {-, }(&), (.~) -})
 import qualified Control.Lens                                                   as L
   (makeLenses)
 import qualified Control.Monad.Trans.Error                                      as E
@@ -29,6 +31,8 @@ import qualified Control.Monad.Trans.Resource                                   
    monadThrow, runResourceT)
 import qualified Data.ByteString.Lazy                                           as LBS
   (hGetContents)
+import qualified Data.ByteString.Char8                                          as C8
+  (unpack)
 import           Data.Conduit
   (($$))
 import qualified Data.Conduit                                                   as C
@@ -39,10 +43,13 @@ import qualified Data.Conduit.List                                              
 import           Data.Csv
   ((.:))
 import qualified Data.Csv                                                       as CSV
-  (FromNamedRecord(..))
+  (FromField(..), FromNamedRecord(..))
 import qualified Data.Csv.Streaming                                             as CSV
   (Records(Cons, Nil),
    decodeByName)
+import qualified Data.IntMap                                                    as IM
+import qualified Data.Time.Calendar                                             as T
+import qualified Data.Time.Clock                                                as T
 import           Database.MongoDB
   ((=:))
 import qualified Database.MongoDB.Admin                                         as DB
@@ -59,6 +66,28 @@ import           Guia.MongoUtils
 import qualified System.IO                                                      as IO
   (FilePath, IOMode(ReadMode),
    openFile)
+
+
+-- Utilities
+
+mkCollection :: DB.PersistEntity record => record -> DB.Action IO ()
+mkCollection record = do
+  let collectionName = DB.collectionName record
+      persistUniqueKeys = DB.persistUniqueKeys record
+      indexFieldLists = map (map DB.unDBName . uniqueKey2fieldList) persistUniqueKeys
+      uniqueKey2fieldList = snd . Prelude.unzip . DB.persistUniqueToFieldNames
+      fieldList2indexName []     = error "Unique key with no field names"
+      fieldList2indexName (f:fs) = f ++ foldl' (\x y -> x ++ "_1_" ++ y) "" fs ++ "_1"
+      mkIndex fieldList = DB.Index { DB.iColl = collectionName
+                                   , DB.iKey = map (=: (1 :: Int)) fieldList -- 1 is asc.
+                                   , DB.iName = fieldList2indexName fieldList
+                                   , DB.iUnique = True
+                                   , DB.iDropDups = False }
+  liftIO $ putStrLn "  Dropping collection"
+  _ <- DB.dropCollection collectionName
+  liftIO $ putStrLn "  Creating unique indexes"
+  mapM_ (DB.createIndex . mkIndex) indexFieldLists
+  return ()
 
 data CsvException
   = CsvError                   String -- ^ Generic exception
@@ -107,7 +136,79 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
   $(DB.persistFileWith DB.lowerCaseSettings "Guia/CsvImport.persistent")
 
 
--- @OldBankAccount@'s
+-- Payers / debtors
+
+data OldPayer
+  = OldPayer
+    { _oldPayerId                :: Int
+    , _oldPayerReferenceCode     :: Text
+    , _oldPayerRegistrationDate  :: T.Day
+    , _oldPayerNameId            :: Int
+    , _oldPayerBankAccountId     :: Maybe Int }
+
+L.makeLenses ''OldPayer
+
+instance CSV.FromNamedRecord (Maybe OldPayer) where
+  parseNamedRecord r = maybeOldPayer <$> r .: "id"
+                                     <*> r .: "reference_code"
+                                     <*> r .: "registration_date"
+                                     <*> r .: "name_id"
+                                     <*> r .: "bank_account_id"
+    where maybeOldPayer i c d n a = Just $ OldPayer i c d n a
+
+instance CSV.FromField (T.Day) where
+  parseField f = case readMay (C8.unpack f) :: Maybe T.Day of
+    Just day    -> pure day
+    Nothing     -> A.empty
+
+readOldPayers :: IO.FilePath -> IO [OldPayer]
+readOldPayers filePath =
+  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
+
+data OldPersonName
+  = OldPersonName
+    { _oldPersonNameId            :: Int
+    , _oldPersonNameFirst         :: Text
+    , _oldPersonNameLast          :: Text }
+
+L.makeLenses ''OldPersonName
+
+instance CSV.FromNamedRecord (Maybe OldPersonName) where
+  parseNamedRecord r = maybeOldPersonName <$> r .: "id"
+                                          <*> r .: "first"
+                                          <*> r .: "last"
+    where maybeOldPersonName i f l = Just $ OldPersonName i f l
+
+readOldPersonNames :: IO.FilePath -> IO [OldPersonName]
+readOldPersonNames filePath =
+  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
+
+importDebtors :: IO.FilePath -> IO.FilePath -> IO ()
+importDebtors payersFile namesFile = do
+  now <- T.getCurrentTime
+  let dummyDebtor = mkDebtor "A" "A" Nothing [] (T.utctDay now)
+  runResourceDbT $ do
+    liftIO $ putStrLn "Creating collection"
+    lift $ mkCollection dummyDebtor
+    liftIO $ putStrLn "Importing payers"
+    payers      <- liftIO (readOldPayers payersFile)
+    liftIO $ putStrLn "Importing person names"
+    personNames <- liftIO (readOldPersonNames namesFile)
+    let personName2tuple pn = (pn ^. oldPersonNameId, (pn ^. oldPersonNameFirst, pn ^. oldPersonNameLast))
+        namesMap = IM.fromList $ map personName2tuple personNames
+        doInsert old = do
+          let new = mkDebtor firstName_ lastName_ Nothing [] (old ^. oldPayerRegistrationDate)
+              (firstName_, lastName_) = case lookup (old ^. oldPayerNameId) namesMap of
+                Just (f, l) -> (f, l)
+                Nothing     -> error "importDebtors: missing OldPersonName"
+          newId <- DB.insert new
+          DB.insert_ $ MapDebtor (old ^. oldPayerId) newId
+    liftIO $ putStrLn "Inserting"
+    mapM_ doInsert payers
+    return ()
+
+
+-- Bank accounts
 
 data OldBankAccount
   = OldBankAccount
@@ -116,23 +217,6 @@ data OldBankAccount
   deriving (Eq, Show, Read)
 
 L.makeLenses ''OldBankAccount
-
-readOldBankAccounts :: IO.FilePath -> IO [OldBankAccount]
-readOldBankAccounts filePath =
-  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
-
-importSpanishBankAccounts :: IO.FilePath -> IO ()
-importSpanishBankAccounts filePath = do
-  let dummyAccount = mkSpanishBankAccount "ES8200000000000000000000"
-      doInsert o = do
-        newId <- DB.insert $ mkSpanishBankAccount (o ^. oldBankAccountIban)
-        DB.insert_ $ MapBankAccount (o ^. oldBankAccountId) newId
-  runResourceDbT $ do
-    liftIO $ putStrLn "Creating collection"
-    lift $ createCollection dummyAccount
-    liftIO $ putStrLn "Importing"
-    oldAccounts <- liftIO (readOldBankAccounts filePath)
-    mapM_ doInsert oldAccounts
 
 instance CSV.FromNamedRecord (Maybe OldBankAccount) where
   parseNamedRecord r = maybeOldBankAccount <$> r .: "id"
@@ -146,8 +230,26 @@ instance CSV.FromNamedRecord (Maybe OldBankAccount) where
           iban_ b o c n = spanishIbanPrefixFromCcc (ccc b o c n) ++ ccc b o c n
           ccc   b o c n = concat [b, o, c, n]
 
+readOldBankAccounts :: IO.FilePath -> IO [OldBankAccount]
+readOldBankAccounts filePath =
+  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
--- @SpanishBank@'s
+importSpanishBankAccounts :: IO.FilePath -> IO ()
+importSpanishBankAccounts filePath = do
+  let dummyAccount = mkSpanishBankAccount "ES8200000000000000000000"
+      doInsert old = do
+        newId <- DB.insert $ mkSpanishBankAccount (old ^. oldBankAccountIban)
+        DB.insert_ $ MapBankAccount (old ^. oldBankAccountId) newId
+  runResourceDbT $ do
+    liftIO $ putStrLn "Creating collection"
+    lift $ mkCollection dummyAccount
+    liftIO $ putStrLn "Importing"
+    oldAccounts <- liftIO (readOldBankAccounts filePath)
+    liftIO $ putStrLn "Inserting"
+    mapM_ doInsert oldAccounts
+
+
+-- Spanish banks
 
 importSpanishBanks :: IO.FilePath -> IO ()
 importSpanishBanks filePath = do
@@ -159,28 +261,9 @@ importSpanishBanks filePath = do
       dummySpanishBank = mkSpanishBank "0000" "AAAAESAAXXX" ""
   runResourceDbT $ do
     liftIO $ putStrLn "Creating collection"
-    lift $ createCollection dummySpanishBank
-    liftIO $ putStrLn "Importing"
+    lift $ mkCollection dummySpanishBank
+    liftIO $ putStrLn "Importing and inserting"
     doImport
-
-createCollection :: DB.PersistEntity record => record -> DB.Action IO ()
-createCollection record = do
-  let collectionName = DB.collectionName record
-      persistUniqueKeys = DB.persistUniqueKeys record
-      indexFieldLists = map (map DB.unDBName . uniqueKey2fieldList) persistUniqueKeys
-      uniqueKey2fieldList = snd . Prelude.unzip . DB.persistUniqueToFieldNames
-      fieldList2indexName []     = error "Unique key with no field names"
-      fieldList2indexName (f:fs) = f ++ foldl' (\x y -> x ++ "_1_" ++ y) "" fs ++ "_1"
-      mkIndex fieldList = DB.Index { DB.iColl = collectionName
-                                   , DB.iKey = map (=: (1 :: Int)) fieldList -- 1 is asc.
-                                   , DB.iName = fieldList2indexName fieldList
-                                   , DB.iUnique = True
-                                   , DB.iDropDups = False }
-  liftIO $ putStrLn "Dropping collection"
-  _ <- DB.dropCollection collectionName
-  liftIO $ putStrLn "Creating unique indexes"
-  mapM_ (DB.createIndex . mkIndex) indexFieldLists
-  return ()
 
 instance CSV.FromNamedRecord (Maybe SpanishBank) where
   parseNamedRecord r = maybeSpanishBank <$> r .: "four_digits_code"
@@ -189,6 +272,7 @@ instance CSV.FromNamedRecord (Maybe SpanishBank) where
     where maybeSpanishBank c b n
             | validSpanishBank c b n = Just $ mkSpanishBank c b n
             | otherwise              = Nothing
+
 
 -- instance CSV.FromNamedRecord (Maybe (DB.Entity SpanishBank)) where
 --   parseNamedRecord r = maybeSpanishBankAndKey <$> r .: "four_digits_code"
