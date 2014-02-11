@@ -138,49 +138,49 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 
 -- Payers / debtors
 
-data OldPayer
-  = OldPayer
-    { _oldPayerId                :: Int
-    , _oldPayerReferenceCode     :: Text
-    , _oldPayerRegistrationDate  :: T.Day
-    , _oldPayerNameId            :: Int
-    , _oldPayerBankAccountId     :: Maybe Int }
+data CsvPayer
+  = CsvPayer
+    { _csvPayerId                :: Int
+    , _csvPayerReferenceCode     :: Text
+    , _csvPayerRegistrationDate  :: T.Day
+    , _csvPayerNameId            :: Int
+    , _csvPayerBankAccountId     :: Maybe Int }
 
-L.makeLenses ''OldPayer
+L.makeLenses ''CsvPayer
 
-instance CSV.FromNamedRecord (Maybe OldPayer) where
-  parseNamedRecord r = maybeOldPayer <$> r .: "id"
+instance CSV.FromNamedRecord (Maybe CsvPayer) where
+  parseNamedRecord r = maybeCsvPayer <$> r .: "id"
                                      <*> r .: "reference_code"
                                      <*> r .: "registration_date"
                                      <*> r .: "name_id"
                                      <*> r .: "bank_account_id"
-    where maybeOldPayer i c d n a = Just $ OldPayer i c d n a
+    where maybeCsvPayer i c d n a = Just $ CsvPayer i c d n a
 
 instance CSV.FromField (T.Day) where
   parseField f = case readMay (C8.unpack f) :: Maybe T.Day of
     Just day    -> pure day
     Nothing     -> A.empty
 
-readOldPayers :: IO.FilePath -> IO [OldPayer]
-readOldPayers filePath =
+readCsvPayers :: IO.FilePath -> IO [CsvPayer]
+readCsvPayers filePath =
   R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
-data OldPersonName
-  = OldPersonName
-    { _oldPersonNameId            :: Int
-    , _oldPersonNameFirst         :: Text
-    , _oldPersonNameLast          :: Text }
+data CsvPersonName
+  = CsvPersonName
+    { _csvPersonNameId            :: Int
+    , _csvPersonNameFirst         :: Text
+    , _csvPersonNameLast          :: Text }
 
-L.makeLenses ''OldPersonName
+L.makeLenses ''CsvPersonName
 
-instance CSV.FromNamedRecord (Maybe OldPersonName) where
-  parseNamedRecord r = maybeOldPersonName <$> r .: "id"
+instance CSV.FromNamedRecord (Maybe CsvPersonName) where
+  parseNamedRecord r = maybeCsvPersonName <$> r .: "id"
                                           <*> r .: "first"
                                           <*> r .: "last"
-    where maybeOldPersonName i f l = Just $ OldPersonName i f l
+    where maybeCsvPersonName i f l = Just $ CsvPersonName i f l
 
-readOldPersonNames :: IO.FilePath -> IO [OldPersonName]
-readOldPersonNames filePath =
+readCsvPersonNames :: IO.FilePath -> IO [CsvPersonName]
+readCsvPersonNames filePath =
   R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
 importDebtors :: IO.FilePath -> IO.FilePath -> IO ()
@@ -191,18 +191,19 @@ importDebtors payersFile namesFile = do
     liftIO $ putStrLn "Creating collection"
     lift $ mkCollection dummyDebtor
     liftIO $ putStrLn "Importing payers"
-    payers      <- liftIO (readOldPayers payersFile)
+    payers      <- liftIO (readCsvPayers payersFile)
     liftIO $ putStrLn "Importing person names"
-    personNames <- liftIO (readOldPersonNames namesFile)
-    let personName2tuple pn = (pn ^. oldPersonNameId, (pn ^. oldPersonNameFirst, pn ^. oldPersonNameLast))
+    personNames <- liftIO (readCsvPersonNames namesFile)
+    let personName2tuple pn = (pn ^. csvPersonNameId, pn)
         namesMap = IM.fromList $ map personName2tuple personNames
-        doInsert old = do
-          let new = mkDebtor firstName_ lastName_ Nothing [] (old ^. oldPayerRegistrationDate)
-              (firstName_, lastName_) = case lookup (old ^. oldPayerNameId) namesMap of
-                Just (f, l) -> (f, l)
-                Nothing     -> error "importDebtors: missing OldPersonName"
-          newId <- DB.insert new
-          DB.insert_ $ MapDebtor (old ^. oldPayerId) newId
+        doInsert csv = do
+          let mongo =
+                mkDebtor firstName_ lastName_ Nothing [] (csv ^. csvPayerRegistrationDate)
+              (firstName_, lastName_) = case lookup (csv ^. csvPayerNameId) namesMap of
+                Just pn -> (pn ^. csvPersonNameFirst, pn ^. csvPersonNameLast)
+                Nothing -> error "importDebtors: missing CsvPersonName"
+          mongoId <- DB.insert mongo
+          DB.insert_ $ MapDebtor (csv ^. csvPayerId) mongoId
     liftIO $ putStrLn "Inserting"
     mapM_ doInsert payers
     return ()
@@ -210,43 +211,43 @@ importDebtors payersFile namesFile = do
 
 -- Bank accounts
 
-data OldBankAccount
-  = OldBankAccount
-    { _oldBankAccountId   :: Int
-    , _oldBankAccountIban :: Text }
+data CsvBankAccount
+  = CsvBankAccount
+    { _csvBankAccountId   :: Int
+    , _csvBankAccountIban :: Text }
   deriving (Eq, Show, Read)
 
-L.makeLenses ''OldBankAccount
+L.makeLenses ''CsvBankAccount
 
-instance CSV.FromNamedRecord (Maybe OldBankAccount) where
-  parseNamedRecord r = maybeOldBankAccount <$> r .: "id"
+instance CSV.FromNamedRecord (Maybe CsvBankAccount) where
+  parseNamedRecord r = maybeCsvBankAccount <$> r .: "id"
                                            <*> r .: "bank_id"
                                            <*> r .: "office"
                                            <*> r .: "control_digits"
                                            <*> r .: "num"
-    where maybeOldBankAccount oldId_ b o c n
-            | cccControlDigits b o n == c = Just $ OldBankAccount oldId_ (iban_ b o c n)
+    where maybeCsvBankAccount i b o c n
+            | cccControlDigits b o n == c = Just $ CsvBankAccount i (iban_ b o c n)
             | otherwise                   = Nothing
           iban_ b o c n = spanishIbanPrefixFromCcc (ccc b o c n) ++ ccc b o c n
           ccc   b o c n = concat [b, o, c, n]
 
-readOldBankAccounts :: IO.FilePath -> IO [OldBankAccount]
-readOldBankAccounts filePath =
+readCsvBankAccounts :: IO.FilePath -> IO [CsvBankAccount]
+readCsvBankAccounts filePath =
   R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
 importSpanishBankAccounts :: IO.FilePath -> IO ()
 importSpanishBankAccounts filePath = do
   let dummyAccount = mkSpanishBankAccount "ES8200000000000000000000"
-      doInsert old = do
-        newId <- DB.insert $ mkSpanishBankAccount (old ^. oldBankAccountIban)
-        DB.insert_ $ MapBankAccount (old ^. oldBankAccountId) newId
+      doInsert csv = do
+        mongoId <- DB.insert $ mkSpanishBankAccount (csv ^. csvBankAccountIban)
+        DB.insert_ $ MapBankAccount (csv ^. csvBankAccountId) mongoId
   runResourceDbT $ do
     liftIO $ putStrLn "Creating collection"
     lift $ mkCollection dummyAccount
     liftIO $ putStrLn "Importing"
-    oldAccounts <- liftIO (readOldBankAccounts filePath)
+    csvAccounts <- liftIO (readCsvBankAccounts filePath)
     liftIO $ putStrLn "Inserting"
-    mapM_ doInsert oldAccounts
+    mapM_ doInsert csvAccounts
 
 
 -- Spanish banks

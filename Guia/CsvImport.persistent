@@ -1,18 +1,18 @@
 MapDebtor                     sql=map_debtors
-  old                         Int
-  new                         DebtorId
+  csvId                       Int
+  mongoId                     DebtorId
 
   -- Uniqueness constraints
-  UniqueDebtorOld             old
-  UniqueDebtorNew             new
+  UniqueDebtorCsvId           csvId
+  UniqueDebtorMongoId         mongoId
   deriving Eq Read Show
 
   
 MapBankAccount                sql=map_bank_accounts
-  old                         Int
-  new                         SpanishBankAccountId
+  csvId                       Int
+  mongoId                     SpanishBankAccountId
 
   -- Uniqueness constraints
-  UniqueBankAccountOld        old
-  UniqueBankAccountNew        new
+  UniqueBankAccountCsvId      csvId
+  UniqueBankAccountMongoId    mongoId
   deriving Eq Read Show
