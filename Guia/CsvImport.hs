@@ -52,6 +52,8 @@ import qualified Data.Time.Calendar                                             
 import qualified Data.Time.Clock                                                as T
 import           Database.MongoDB
   ((=:))
+import qualified Database.MongoDB                                               as DB
+  (genObjectId)
 import qualified Database.MongoDB.Admin                                         as DB
   (Index(..),
    createIndex, dropCollection)
@@ -186,10 +188,14 @@ readCsvPersonNames filePath =
 importDebtors :: IO.FilePath -> IO.FilePath -> IO ()
 importDebtors payersFile namesFile = do
   now <- T.getCurrentTime
+  dummyId <- DB.genObjectId
   let dummyDebtor = mkDebtor "A" "A" Nothing [] (T.utctDay now)
+      dummyMapDebtor = MapDebtor 1 (DB.oidToKey dummyId)
   runResourceDbT $ do
-    liftIO $ putStrLn "Creating collection"
+    liftIO $ putStrLn "Creating debtors collection"
     lift $ mkCollection dummyDebtor
+    liftIO $ putStrLn "Creating map_debtors collection"
+    lift $ mkCollection dummyMapDebtor
     liftIO $ putStrLn "Importing payers"
     payers      <- liftIO (readCsvPayers payersFile)
     liftIO $ putStrLn "Importing person names"
@@ -237,13 +243,17 @@ readCsvBankAccounts filePath =
 
 importSpanishBankAccounts :: IO.FilePath -> IO ()
 importSpanishBankAccounts filePath = do
+  dummyId <- DB.genObjectId
   let dummyAccount = mkSpanishBankAccount "ES8200000000000000000000"
+      dummyMapBankAccount = MapBankAccount 0 (DB.oidToKey dummyId)
       doInsert csv = do
         mongoId <- DB.insert $ mkSpanishBankAccount (csv ^. csvBankAccountIban)
         DB.insert_ $ MapBankAccount (csv ^. csvBankAccountId) mongoId
   runResourceDbT $ do
-    liftIO $ putStrLn "Creating collection"
+    liftIO $ putStrLn "Creating spanish_bank_accounts collection"
     lift $ mkCollection dummyAccount
+    liftIO $ putStrLn "Creating map_bank_accounts collection"
+    lift $ mkCollection dummyMapBankAccount
     liftIO $ putStrLn "Importing"
     csvAccounts <- liftIO (readCsvBankAccounts filePath)
     liftIO $ putStrLn "Inserting"
