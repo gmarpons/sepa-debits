@@ -26,6 +26,7 @@ module Guia.Debtor
          signatureDate,
 
          -- SpanishBankAccount
+         mkSpanishBankAccount,
          SpanishBankAccount, SpanishBankAccountId,
          iban,
          bankId,
@@ -78,6 +79,11 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
   $(DB.persistFileWith DB.lowerCaseSettings "Guia/Debtor.persistent")
 
+mkSpanishBankAccount :: Text -> SpanishBankAccount
+mkSpanishBankAccount iban_ =
+  assert (validSpanishBankAccount iban_)
+  $ SpanishBankAccount iban_
+
 -- | Getter for a unique key to look for a SpanishBank.
 bankId :: (Functor f, L.Contravariant f, L.Conjoined p) =>
           p Text (f Text) -> p SpanishBankAccount (f SpanishBankAccount)
@@ -90,7 +96,9 @@ _bankId sba = fourDigitsCode_
 
 validSpanishBankAccount :: Text -> Bool
 validSpanishBankAccount iban_ =
-     all CH.isDigit iban_ && length iban_ == 24
+  -- That the last 22 chars are digits is already guaranteed by asserts in
+  -- spanishIbanPrefixFromCcc and cccControlDigits
+     length iban_ == 24
   && ibanPrefix == spanishIbanPrefixFromCcc ccc
   && controlDigits == cccControlDigits fourDigitsCode_ office num
   -- && DB.fromPersistValueText (DB.unKey bankId_) == Right fourDigitsCode_
@@ -102,8 +110,9 @@ validSpanishBankAccount iban_ =
 -- | Pre: 'ccc' contains exactly 20 decimal digits. Returned value contains a 4-character
 -- text, with "ES" prefix followed by 2 decimal digits.
 spanishIbanPrefixFromCcc :: Text -> Text
-spanishIbanPrefixFromCcc ccc = assert (all CH.isDigit ccc && length ccc == 20)
-                        $ "ES" ++ checkDigits
+spanishIbanPrefixFromCcc ccc =
+  assert (all CH.isDigit ccc && length ccc == 20)
+  $ "ES" ++ checkDigits
   where
     checkDigits = pack $ PF.printf "%02d" (98 - (extendedCccAsNum `mod` 97))
     extendedCccAsNum :: Integer                          -- We need unbound precision

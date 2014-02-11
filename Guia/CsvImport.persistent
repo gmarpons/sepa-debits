@@ -1,0 +1,8 @@
+MapBankAccount                sql=map_bank_accounts
+  old                         Int
+  new                         SpanishBankAccountId
+
+  -- Uniqueness constraints
+  UniqueOld                   old
+  UniqueNew                   new
+  deriving Eq Read Show

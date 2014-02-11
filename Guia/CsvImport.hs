@@ -6,6 +6,7 @@
   NoImplicitPrelude,
   OverloadedStrings,
   ScopedTypeVariables,
+  TemplateHaskell,
   TypeFamilies
   #-}
 
@@ -15,6 +16,10 @@ import qualified Prelude
   (unzip)
 
 import           ClassyPrelude
+import           Control.Lens
+  ((^.), (&), (.~))
+import qualified Control.Lens                                                   as L
+  (makeLenses)
 import qualified Control.Monad.Trans.Error                                      as E
   (Error(strMsg))
 import qualified Control.Monad.Trans.State                                      as MS
@@ -44,11 +49,12 @@ import qualified Database.MongoDB.Admin                                         
   (Index(..),
    createIndex, dropCollection)
 import qualified Database.Persist.MongoDB                                       as DB
-  (Action, Entity(..), KeyBackend(Key), PersistEntity,
-   PersistValue(PersistText),
-   collectionName, entityKey, entityVal, insert_, persistUniqueToFieldNames,
-   persistUniqueKeys, DBName(..))
+import qualified Database.Persist.Quasi                                         as DB
+  (lowerCaseSettings)
+import qualified Database.Persist.TH                                            as DB
+  (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
 import           Guia.Debtor
+import           Guia.MongoSettings
 import           Guia.MongoUtils
 import qualified System.IO                                                      as IO
   (FilePath, IOMode(ReadMode),
@@ -96,18 +102,37 @@ sourceCsvFile filePath =
       recordNum <- MS.get
       R.monadThrow $ e ("Line " ++ show recordNum ++ ": " ++ msg)
 
+DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
+                                     , DB.mpsPrefixFields   = True }]
+  $(DB.persistFileWith DB.lowerCaseSettings "Guia/CsvImport.persistent")
+
 
 -- @OldBankAccount@'s
+
+data OldBankAccount
+  = OldBankAccount
+    { _oldBankAccountId   :: Int
+    , _oldBankAccountIban :: Text }
+  deriving (Eq, Show, Read)
+
+L.makeLenses ''OldBankAccount
 
 readOldBankAccounts :: IO.FilePath -> IO [OldBankAccount]
 readOldBankAccounts filePath =
   R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
-data OldBankAccount
-  = OldBankAccount
-    { id   :: Int
-    , iban :: Text }
-  deriving (Eq, Show, Read)
+importSpanishBankAccounts :: IO.FilePath -> IO ()
+importSpanishBankAccounts filePath = do
+  let dummyAccount = mkSpanishBankAccount "ES8200000000000000000000"
+      doInsert o = do
+        newId <- DB.insert $ mkSpanishBankAccount (o ^. oldBankAccountIban)
+        DB.insert_ $ MapBankAccount (o ^. oldBankAccountId) newId
+  runResourceDbT $ do
+    liftIO $ putStrLn "Creating collection"
+    lift $ createCollection dummyAccount
+    liftIO $ putStrLn "Importing"
+    oldAccounts <- liftIO (readOldBankAccounts filePath)
+    mapM_ doInsert oldAccounts
 
 instance CSV.FromNamedRecord (Maybe OldBankAccount) where
   parseNamedRecord r = maybeOldBankAccount <$> r .: "id"
@@ -115,11 +140,12 @@ instance CSV.FromNamedRecord (Maybe OldBankAccount) where
                                            <*> r .: "office"
                                            <*> r .: "control_digits"
                                            <*> r .: "num"
-    where maybeOldBankAccount id_ b o c n
-            | cccControlDigits b o n == c = Just $ OldBankAccount id_ (iban_ b o c n)
+    where maybeOldBankAccount oldId_ b o c n
+            | cccControlDigits b o n == c = Just $ OldBankAccount oldId_ (iban_ b o c n)
             | otherwise                   = Nothing
           iban_ b o c n = spanishIbanPrefixFromCcc (ccc b o c n) ++ ccc b o c n
           ccc   b o c n = concat [b, o, c, n]
+
 
 -- @SpanishBank@'s
 
@@ -132,9 +158,9 @@ importSpanishBanks filePath = do
       doImport = banks $$ CL.mapM_ DB.insert_
       dummySpanishBank = mkSpanishBank "0000" "AAAAESAAXXX" ""
   runResourceDbT $ do
-    liftIO $ putStrLn "Before creating collection"
+    liftIO $ putStrLn "Creating collection"
     lift $ createCollection dummySpanishBank
-    liftIO $ putStrLn "Before importing"
+    liftIO $ putStrLn "Importing"
     doImport
 
 createCollection :: DB.PersistEntity record => record -> DB.Action IO ()
@@ -150,9 +176,9 @@ createCollection record = do
                                    , DB.iName = fieldList2indexName fieldList
                                    , DB.iUnique = True
                                    , DB.iDropDups = False }
-  liftIO $ putStrLn "Before dropping collection"
+  liftIO $ putStrLn "Dropping collection"
   _ <- DB.dropCollection collectionName
-  liftIO $ putStrLn "Before creating unique indexes"
+  liftIO $ putStrLn "Creating unique indexes"
   mapM_ (DB.createIndex . mkIndex) indexFieldLists
   return ()
 
