@@ -22,6 +22,7 @@ import           Control.Lens
   ((^.) {-, }(&), (.~) -})
 import qualified Control.Lens                                                   as L
   (makeLenses)
+import qualified Control.Monad.Trans.Maybe                                      as M
 import qualified Control.Monad.Trans.Error                                      as E
   (Error(strMsg))
 import qualified Control.Monad.Trans.State                                      as MS
@@ -68,6 +69,7 @@ import           Guia.MongoUtils
 import qualified System.IO                                                      as IO
   (FilePath, IOMode(ReadMode),
    openFile)
+import qualified Text.Printf                                                    as PF
 
 
 -- Utilities
@@ -143,7 +145,6 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 data CsvPayer
   = CsvPayer
     { _csvPayerId                :: Int
-    , _csvPayerReferenceCode     :: Text
     , _csvPayerRegistrationDate  :: T.Day
     , _csvPayerNameId            :: Int
     , _csvPayerBankAccountId     :: Maybe Int }
@@ -152,11 +153,10 @@ L.makeLenses ''CsvPayer
 
 instance CSV.FromNamedRecord (Maybe CsvPayer) where
   parseNamedRecord r = maybeCsvPayer <$> r .: "id"
-                                     <*> r .: "reference_code"
                                      <*> r .: "registration_date"
                                      <*> r .: "name_id"
                                      <*> r .: "bank_account_id"
-    where maybeCsvPayer i c d n a = Just $ CsvPayer i c d n a
+    where maybeCsvPayer i d n a = Just $ CsvPayer i d n a
 
 instance CSV.FromField (T.Day) where
   parseField f = case readMay (C8.unpack f) :: Maybe T.Day of
@@ -186,30 +186,45 @@ readCsvPersonNames filePath =
   R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
 importDebtors :: IO.FilePath -> IO.FilePath -> IO ()
-importDebtors payersFile namesFile = do
+importDebtors payersFile namesFile {-accountsFile-} = do
   now <- T.getCurrentTime
   dummyId <- DB.genObjectId
-  let dummyDebtor = mkDebtor "A" "A" Nothing [] (T.utctDay now)
+  putStrLn "Importing payers"
+  payers <- readCsvPayers payersFile
+  putStrLn "Importing person names"
+  personNames <- readCsvPersonNames namesFile
+  -- liftIO $ putStrLn "Importing bank accounts"
+  -- csvAccounts <- liftIO (readCsvBankAccounts accountsFile)
+  let namesMap = IM.fromList $ map (\pn -> (pn ^. csvPersonNameId, pn)) personNames
+      today = T.utctDay now
+      dummyDebtor = mkDebtor "A" "A" Nothing [] today
       dummyMapDebtor = MapDebtor 1 (DB.oidToKey dummyId)
+      doInsert payer = do
+        let ref :: Text
+            ref = pack $ PF.printf "%012d" (payer ^. csvPayerId) ++ replicate (35-12) ' '
+            (first_, last_) = case lookup (payer ^. csvPayerNameId) namesMap of
+              Just pn -> (pn ^. csvPersonNameFirst, pn ^. csvPersonNameLast)
+              Nothing -> error "importDebtors: missing CsvPersonName"
+            mCsvAccountId = payer ^. csvPayerBankAccountId
+        mMandate <- M.runMaybeT $ do
+          csvAccountId <- M.MaybeT $ return mCsvAccountId
+          payer2debtorEntity <- M.MaybeT $ lift $ DB.getBy $ UniqueBankAccountCsvId csvAccountId
+          let payer2debtor = DB.entityVal payer2debtorEntity
+          account_ <- M.MaybeT $ lift $ DB.get (payer2debtor ^. mapBankAccountMongoId)
+          -- Caution with fromGregorianValid: dates are clipped if numbers out of range!
+          return $ mkMandate ref account_ (T.fromGregorian 2009 10 31)
+        case (mCsvAccountId, mMandate) of
+          (Just _, Nothing) -> error "importDebtors: cannot map bank account"
+          _                 -> return ()
+        let debtor = mkDebtor first_ last_ mMandate [] (payer ^. csvPayerRegistrationDate)
+        mongoId <- DB.insert debtor
+        DB.insert_ $ MapDebtor (payer ^. csvPayerId) mongoId
+        return ()
   runResourceDbT $ do
     liftIO $ putStrLn "Creating debtors collection"
     lift $ mkCollection dummyDebtor
     liftIO $ putStrLn "Creating map_debtors collection"
     lift $ mkCollection dummyMapDebtor
-    liftIO $ putStrLn "Importing payers"
-    payers      <- liftIO (readCsvPayers payersFile)
-    liftIO $ putStrLn "Importing person names"
-    personNames <- liftIO (readCsvPersonNames namesFile)
-    let personName2tuple pn = (pn ^. csvPersonNameId, pn)
-        namesMap = IM.fromList $ map personName2tuple personNames
-        doInsert csv = do
-          let mongo =
-                mkDebtor firstName_ lastName_ Nothing [] (csv ^. csvPayerRegistrationDate)
-              (firstName_, lastName_) = case lookup (csv ^. csvPayerNameId) namesMap of
-                Just pn -> (pn ^. csvPersonNameFirst, pn ^. csvPersonNameLast)
-                Nothing -> error "importDebtors: missing CsvPersonName"
-          mongoId <- DB.insert mongo
-          DB.insert_ $ MapDebtor (csv ^. csvPayerId) mongoId
     liftIO $ putStrLn "Inserting"
     mapM_ doInsert payers
     return ()

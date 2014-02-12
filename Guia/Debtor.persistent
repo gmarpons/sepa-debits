@@ -2,24 +2,23 @@ Debtor                        sql=debtors
   firstName                   Text
   lastName                    Text
   activeMandate               Mandate Maybe
-  oldMandates                 [Mandate]
+  cancelledMandates           [Mandate]
   registrationDate            T.Day
   deriving Eq Read Show
 
 
 Mandate                       sql=mandates
-  mandateReference            Text
+  mandateRef                  Text
   account                     SpanishBankAccount
   signatureDate               T.Day
 
   -- Unique constraints
-  UniqueMandateReference      mandateReference
+  UniqueMandateRef            mandateRef
   deriving Eq Read Show
 
 
 SpanishBankAccount            sql=spanish_bank_accounts
   iban                        Text
-  --bankId                      SpanishBankId
   deriving Eq Read Show
 
 

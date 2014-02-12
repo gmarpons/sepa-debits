@@ -17,15 +17,17 @@ module Guia.Debtor
          firstName,
          lastName,
          activeMandate,
-         oldMandates,
+         cancelledMandates,
          registrationDate,
          validDebtor,
 
          -- Mandate
+         mkMandate,
          Mandate, MandateId,
-         mandateReference,
+         mandateRef,
          account,
          signatureDate,
+         validMandate,
 
          -- SpanishBankAccount
          mkSpanishBankAccount,
@@ -95,6 +97,21 @@ validDebtor firstName_ lastName_ _activeMandate_ _oldMandates_ _registrationDate
   && not (null lastName_)  && length lastName_  <= maxLastNameLength
   where maxFirstNameLength = 40
         maxLastNameLength  = 40
+
+
+-- Mandates
+
+mkMandate :: Text -> SpanishBankAccount -> T.Day -> Mandate
+mkMandate ref account_ signatureDate_ =
+  assert (validMandate ref account_ signatureDate_)
+  $ Mandate ref account_ signatureDate_
+
+-- In fact more characters are allowed in mandate reference code (but not all), but for
+  -- simplicity we constraint us to digits + space.
+validMandate :: Text -> SpanishBankAccount -> T.Day -> Bool
+validMandate ref _account_ _signatureDate_ =
+     length ref == 35
+  && all (\c -> CH.isDigit c || c == ' ') ref
 
 
 -- Spanish bank accounts
