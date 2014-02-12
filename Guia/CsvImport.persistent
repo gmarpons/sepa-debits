@@ -6,13 +6,3 @@ MapDebtor                     sql=map_debtors
   UniqueDebtorCsvId           csvId
   UniqueDebtorMongoId         mongoId
   deriving Eq Read Show
-
-  
-MapBankAccount                sql=map_bank_accounts
-  csvId                       Int
-  mongoId                     SpanishBankAccountId
-
-  -- Uniqueness constraints
-  UniqueBankAccountCsvId      csvId
-  UniqueBankAccountMongoId    mongoId
-  deriving Eq Read Show

@@ -16,8 +16,7 @@ module Guia.Debtor
          Debtor, DebtorId,
          firstName,
          lastName,
-         activeMandate,
-         cancelledMandates,
+         mandates,
          registrationDate,
          validDebtor,
 
@@ -25,16 +24,11 @@ module Guia.Debtor
          mkMandate,
          Mandate, MandateId,
          mandateRef,
-         account,
-         signatureDate,
-         validMandate,
-
-         -- SpanishBankAccount
-         mkSpanishBankAccount,
-         SpanishBankAccount, SpanishBankAccountId,
          iban,
+         signatureDate,
+         lastTimeActive,
          bankId,
-         validSpanishBankAccount,
+         validMandate,
          spanishIbanPrefixFromCcc,
          cccControlDigits,
 
@@ -86,53 +80,48 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 
 -- Debtors
 
-mkDebtor :: Text -> Text -> Maybe Mandate -> [Mandate] -> T.Day -> Debtor
-mkDebtor firstName_ lastName_ activeMandate_ oldMandates_ registrationDate_ =
-  assert (validDebtor firstName_ lastName_ activeMandate_ oldMandates_ registrationDate_)
-  $ Debtor firstName_ lastName_ activeMandate_ oldMandates_ registrationDate_
+mkDebtor :: Text -> Text -> [Mandate] -> T.Day -> Debtor
+mkDebtor firstName_ lastName_ mandates_ registrationDate_ =
+  assert (validDebtor firstName_ lastName_ mandates_ registrationDate_)
+  $ Debtor firstName_ lastName_ mandates_ registrationDate_
 
-validDebtor :: Text -> Text -> Maybe Mandate -> [Mandate] -> T.Day -> Bool
-validDebtor firstName_ lastName_ _activeMandate_ _oldMandates_ _registrationDate_ =
+validDebtor :: Text -> Text -> [Mandate] -> T.Day -> Bool
+validDebtor firstName_ lastName_ _mandates_ _registrationDate_ =
      not (null firstName_) && length firstName_ <= maxFirstNameLength
   && not (null lastName_)  && length lastName_  <= maxLastNameLength
+  && length lastName_  + length firstName_ <= maxNameLength
   where maxFirstNameLength = 40
         maxLastNameLength  = 40
+        maxNameLength      = 70
 
 
 -- Mandates
 
-mkMandate :: Text -> SpanishBankAccount -> T.Day -> Mandate
-mkMandate ref account_ signatureDate_ =
-  assert (validMandate ref account_ signatureDate_)
-  $ Mandate ref account_ signatureDate_
+mkMandate :: Text -> Text -> T.Day -> Maybe T.Day -> Mandate
+mkMandate ref iban_ signatureDate_ lastTimeActive_ =
+  assert (validMandate ref iban_ signatureDate_ lastTimeActive_)
+  $ Mandate ref iban_ signatureDate_ lastTimeActive_
 
 -- In fact more characters are allowed in mandate reference code (but not all), but for
   -- simplicity we constraint us to digits + space.
-validMandate :: Text -> SpanishBankAccount -> T.Day -> Bool
-validMandate ref _account_ _signatureDate_ =
-     length ref == 35
-  && all (\c -> CH.isDigit c || c == ' ') ref
+validMandate :: Text -> Text -> T.Day -> Maybe T.Day -> Bool
+validMandate ref iban_ _signatureDate_ _lastTimeActive_ =
+     length ref == 35 && all (\c -> CH.isDigit c || c == ' ') ref
+  && validSpanishIban iban_
 
-
--- Spanish bank accounts
-
-mkSpanishBankAccount :: Text -> SpanishBankAccount
-mkSpanishBankAccount iban_ =
-  assert (validSpanishBankAccount iban_)
-  $ SpanishBankAccount iban_
 
 -- | Getter for a unique key to look for a SpanishBank.
 bankId :: (Functor f, L.Contravariant f, L.Conjoined p) =>
-          p Text (f Text) -> p SpanishBankAccount (f SpanishBankAccount)
+          p Text (f Text) -> p Mandate (f Mandate)
 bankId = L.to _bankId
 
-_bankId :: SpanishBankAccount -> Text
-_bankId sba = fourDigitsCode_
-  where (_ibanPrefix, ccc)   = splitAt 4 (sba ^. iban)
+_bankId :: Mandate -> Text
+_bankId mandate = fourDigitsCode_
+  where (_ibanPrefix, ccc)   = splitAt 4 (mandate ^. iban)
         (fourDigitsCode_, _) = splitAt 4 ccc
 
-validSpanishBankAccount :: Text -> Bool
-validSpanishBankAccount iban_ =
+validSpanishIban :: Text -> Bool
+validSpanishIban iban_ =
   -- That the last 22 chars are digits is already guaranteed by asserts in
   -- spanishIbanPrefixFromCcc and cccControlDigits
      length iban_ == 24

@@ -54,7 +54,8 @@ import qualified Data.Time.Clock                                                
 import           Database.MongoDB
   ((=:))
 import qualified Database.MongoDB                                               as DB
-  (genObjectId)
+  (Collection,
+   genObjectId)
 import qualified Database.MongoDB.Admin                                         as DB
   (Index(..),
    createIndex, dropCollection)
@@ -89,25 +90,6 @@ data CsvPayer
 
 L.makeLenses ''CsvPayer
 
-data CsvPersonName
-  = CsvPersonName
-    { _csvPersonNameId            :: Int
-    , _csvPersonNameFirst         :: Text
-    , _csvPersonNameLast          :: Text }
-
-L.makeLenses ''CsvPersonName
-
-data CsvBankAccount
-  = CsvBankAccount
-    { _csvBankAccountId   :: Int
-    , _csvBankAccountIban :: Text }
-  deriving (Eq, Show, Read)
-
-L.makeLenses ''CsvBankAccount
-
-
--- Debtors / payers
-
 instance CSV.FromNamedRecord (Maybe CsvPayer) where
   parseNamedRecord r = maybeCsvPayer <$> r .: "id"
                                      <*> r .: "registration_date"
@@ -120,9 +102,13 @@ instance CSV.FromField (T.Day) where
     Just day    -> pure day
     Nothing     -> A.empty
 
-readCsvPayers :: FilePath -> IO [CsvPayer]
-readCsvPayers filePath =
-  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
+data CsvPersonName
+  = CsvPersonName
+    { _csvPersonNameId            :: Int
+    , _csvPersonNameFirst         :: Text
+    , _csvPersonNameLast          :: Text }
+
+L.makeLenses ''CsvPersonName
 
 instance CSV.FromNamedRecord (Maybe CsvPersonName) where
   parseNamedRecord r = maybeCsvPersonName <$> r .: "id"
@@ -130,62 +116,13 @@ instance CSV.FromNamedRecord (Maybe CsvPersonName) where
                                           <*> r .: "last"
     where maybeCsvPersonName i f l = Just $ CsvPersonName i f l
 
-readCsvPersonNames :: FilePath -> IO [CsvPersonName]
-readCsvPersonNames filePath =
-  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
+data CsvBankAccount
+  = CsvBankAccount
+    { _csvBankAccountId   :: Int
+    , _csvBankAccountIban :: Text }
+  deriving (Eq, Show, Read)
 
-importDebtors :: FilePath -> IO ()
-importDebtors csvDirecory  = do
-  now <- T.getCurrentTime
-  dummyId <- DB.genObjectId
-  putStrLn "Importing payers"
-  payers <- readCsvPayers (csvDirecory </> "payers.csv")
-  putStrLn "Importing person names"
-  personNames <- readCsvPersonNames (csvDirecory </> "person_names.csv")
-  liftIO $ putStrLn "Importing bank accounts"
-  csvAccounts <- liftIO (readCsvBankAccounts (csvDirecory </> "bank_accounts.csv"))
-  let namesMap =    IM.fromList $ map (\pn -> (pn ^. csvPersonNameId, pn)) personNames
-      accountsMap = IM.fromList $ map (\a  -> (a  ^. csvBankAccountId ,a)) csvAccounts
-      today          = T.utctDay now
-      dummyDebtor    = mkDebtor "A" "A" Nothing [] today
-      dummyMapDebtor = MapDebtor 1 (DB.oidToKey dummyId)
-      dummyMandate   = mkMandate (replicate 35 '0') dummyAccount today
-      dummyAccount   = mkSpanishBankAccount "ES8200000000000000000000"
-      doInsert payer = do
-        let ref :: Text
-            ref = pack $ PF.printf "%012d" (payer ^. csvPayerId) ++ replicate (35-12) ' '
-            (first_, last_) = case lookup (payer ^. csvPayerNameId) namesMap of
-              Just pn -> (pn ^. csvPersonNameFirst, pn ^. csvPersonNameLast)
-              Nothing -> error "importDebtors: missing CsvPersonName"
-            mCsvAccountId = payer ^. csvPayerBankAccountId
-        mMandate <- M.runMaybeT $ do
-          csvAccountId <- M.MaybeT $ return mCsvAccountId
-          csvAccount <- M.MaybeT $ return $ lookup csvAccountId accountsMap
-          let account_ = mkSpanishBankAccount (csvAccount ^. csvBankAccountIban)
-          -- Caution with fromGregorianValid: dates are clipped if numbers out of range!
-          return $ mkMandate ref account_ (T.fromGregorian 2009 10 31)
-        case (mCsvAccountId, mMandate) of
-          (Just _, Nothing) -> error "importDebtors: missing CsvBankAccount"
-          _                 -> return ()
-        let debtor = mkDebtor first_ last_ mMandate [] (payer ^. csvPayerRegistrationDate)
-        mongoId <- DB.insert debtor
-        DB.insert_ $ MapDebtor (payer ^. csvPayerId) mongoId
-        return ()
-  runResourceDbT $ do
-    liftIO $ putStrLn "Creating debtors collection"
-    lift $ mkCollection dummyDebtor
-    liftIO $ putStrLn "Creating map_debtors collection"
-    lift $ mkCollection dummyMapDebtor
-    liftIO $ putStrLn "Creating mandates collection"
-    lift $ mkCollection dummyMandate
-    liftIO $ putStrLn "Creating spanish_bank_accounts collection"
-    lift $ mkCollection dummyAccount
-    liftIO $ putStrLn "Inserting"
-    mapM_ doInsert payers
-    return ()
-
-
--- Bank accounts
+L.makeLenses ''CsvBankAccount
 
 instance CSV.FromNamedRecord (Maybe CsvBankAccount) where
   parseNamedRecord r = maybeCsvBankAccount <$> r .: "id"
@@ -199,37 +136,107 @@ instance CSV.FromNamedRecord (Maybe CsvBankAccount) where
           iban_ b o c n = spanishIbanPrefixFromCcc (ccc b o c n) ++ ccc b o c n
           ccc   b o c n = concat [b, o, c, n]
 
+data CsvLastTimeActive
+  = CsvLastTimeActive
+    { _csvLastTimeActivePayerId        :: Int
+    , _csvLastTimeActiveLastTimeActive :: T.Day }
+    deriving (Eq, Show, Read)
+
+L.makeLenses ''CsvLastTimeActive
+
+instance CSV.FromNamedRecord (Maybe CsvLastTimeActive) where
+  parseNamedRecord r = maybeCsvLastTimeActive <$> r .: "payer_id"
+                                              <*> r .: "last_time_active"
+    where maybeCsvLastTimeActive i l = Just $ CsvLastTimeActive i l
+
+
+-- Import debtors from CSV files
+
+importDebtors :: FilePath -> IO ()
+importDebtors csvDirecory  = do
+  now <- T.getCurrentTime
+  dummyId <- DB.genObjectId
+  putStrLn "Importing payers"
+  payers <- readCsvPayers (csvDirecory </> "payers.csv")
+  putStrLn "Importing person names"
+  personNames <- readCsvPersonNames (csvDirecory </> "person_names.csv")
+  liftIO $ putStrLn "Importing bank accounts"
+  accounts <- readCsvBankAccounts (csvDirecory </> "bank_accounts.csv")
+  liftIO $ putStrLn "Importing last time used info for mandates"
+  lastTimeL <- readCsvLastTimeActive (csvDirecory </> "last_time_active.csv")
+  let namesMap =    IM.fromList $ map (\pn -> (pn ^. csvPersonNameId, pn)) personNames
+      accountsMap = IM.fromList $ map (\a  -> (a  ^. csvBankAccountId, a)) accounts
+      lastTimeMap = IM.fromList $ map (\lt -> ( lt ^. csvLastTimeActivePayerId
+                                              , lt ^. csvLastTimeActiveLastTimeActive)
+                                      ) lastTimeL
+      today          = T.utctDay now
+      dummyDebtor    = mkDebtor "A" "A" [] today
+      dummyMapDebtor = MapDebtor 1 (DB.oidToKey dummyId)
+      -- dummyIban      = "ES8200000000000000000000"
+      -- dummyMandate   = mkMandate (replicate 35 '0') dummyIban today Nothing
+      doInsert payer = do
+        let ref :: Text
+            ref = pack $ PF.printf "%012d" (payer ^. csvPayerId) ++ replicate (35-12) ' '
+            (first_, last_) = case lookup (payer ^. csvPayerNameId) namesMap of
+              Just pn -> (pn ^. csvPersonNameFirst, pn ^. csvPersonNameLast)
+              Nothing -> error "importDebtors: missing CsvPersonName"
+            mCsvAccountId = payer ^. csvPayerBankAccountId
+        mMandate <- M.runMaybeT $ do
+          csvAccountId <- M.MaybeT $ return mCsvAccountId
+          csvAccount <- M.MaybeT $ return $ lookup csvAccountId accountsMap
+          let iban_ = csvAccount ^. csvBankAccountIban
+              mCsvLastTime = lookup (payer ^. csvPayerId) lastTimeMap
+              -- Caution with fromGregorianValid: dates are clipped if numbers out of range!
+              csvLastTime = maybe (T.fromGregorian 2001 12 1) id mCsvLastTime
+          return $ mkMandate ref iban_ (T.fromGregorian 2009 10 31) (Just csvLastTime)
+        -- An imported payer can have or have not an associated bank account, but in case
+        -- it does, a mandate must be created.
+        case (mCsvAccountId, mMandate) of
+          (Just _, Nothing) -> error "importDebtors: missing CsvBankAccount"
+          _                 -> return ()
+        let registrationDate_ = payer ^. csvPayerRegistrationDate
+            debtor = mkDebtor first_ last_ (maybeToList mMandate) registrationDate_
+        mongoId <- DB.insert debtor
+        DB.insert_ $ MapDebtor (payer ^. csvPayerId) mongoId
+        return ()
+  runResourceDbT $ do
+    liftIO $ putStrLn "Creating debtors collection"
+    lift $ mkCollection dummyDebtor
+    liftIO $ putStrLn "Creating map_debtors collection"
+    lift $ mkCollection dummyMapDebtor
+    -- FIXME: Create unique index for mandates in debtors collection. Not possible because
+    -- MongoDB bindings don't currently support creation of sparse indexes, necessary to
+    -- not flag an error for debors without any mandate. Command to do it manually:
+    -- > db.debtors.ensureIndex({"mandates.mandateRef" : 1}, {"unique" : true, "sparse" : true})
+    -- let debtorsCollection = DB.collectionName dummyDebtor
+    -- lift $ mkUniqueIndex debtorsCollection ["mandates.mandateRef"]
+    liftIO $ putStrLn "Inserting"
+    mapM_ doInsert payers
+    return ()
+
+readCsvPayers :: FilePath -> IO [CsvPayer]
+readCsvPayers filePath =
+  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
+
+readCsvPersonNames :: FilePath -> IO [CsvPersonName]
+readCsvPersonNames filePath =
+  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
+
 readCsvBankAccounts :: FilePath -> IO [CsvBankAccount]
 readCsvBankAccounts filePath =
   R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
-importSpanishBankAccounts :: FilePath -> IO ()
-importSpanishBankAccounts filePath = do
-  dummyId <- DB.genObjectId
-  let dummyAccount = mkSpanishBankAccount "ES8200000000000000000000"
-      dummyMapBankAccount = MapBankAccount 0 (DB.oidToKey dummyId)
-      doInsert csv = do
-        mongoId <- DB.insert $ mkSpanishBankAccount (csv ^. csvBankAccountIban)
-        DB.insert_ $ MapBankAccount (csv ^. csvBankAccountId) mongoId
-  runResourceDbT $ do
-    liftIO $ putStrLn "Creating spanish_bank_accounts collection"
-    lift $ mkCollection dummyAccount
-    liftIO $ putStrLn "Creating map_bank_accounts collection"
-    lift $ mkCollection dummyMapBankAccount
-    liftIO $ putStrLn "Importing"
-    csvAccounts <- liftIO (readCsvBankAccounts filePath)
-    liftIO $ putStrLn "Inserting"
-    mapM_ doInsert csvAccounts
+readCsvLastTimeActive :: FilePath -> IO [CsvLastTimeActive]
+readCsvLastTimeActive filePath =
+  R.runResourceT $ sourceCsvFile filePath $$ CL.consume
 
 
--- Spanish banks
+-- Import spanish banks from CSV file
 
 importSpanishBanks :: FilePath -> IO ()
-importSpanishBanks filePath = do
-  let --banks :: C.Source (R.ResourceT (DB.Action IO)) (DB.Entity SpanishBank)
-      banks :: C.Source (R.ResourceT (DB.Action IO)) SpanishBank
-      banks = sourceCsvFile filePath
-      --doImport = banks $$ CL.mapM_ (\e -> DB.insertKey (DB.entityKey e) (DB.entityVal e))
+importSpanishBanks csvDirectory = do
+  let banks :: C.Source (R.ResourceT (DB.Action IO)) SpanishBank
+      banks = sourceCsvFile (csvDirectory </> "spanish_banks.csv")
       doImport = banks $$ CL.mapM_ DB.insert_
       dummySpanishBank = mkSpanishBank "0000" "AAAAESAAXXX" ""
   runResourceDbT $ do
@@ -255,18 +262,21 @@ mkCollection record = do
       persistUniqueKeys = DB.persistUniqueKeys record
       indexFieldLists = map (map DB.unDBName . uniqueKey2fieldList) persistUniqueKeys
       uniqueKey2fieldList = snd . Prelude.unzip . DB.persistUniqueToFieldNames
-      fieldList2indexName []     = error "Unique key with no field names"
-      fieldList2indexName (f:fs) = f ++ foldl' (\x y -> x ++ "_1_" ++ y) "" fs ++ "_1"
-      mkIndex fieldList = DB.Index { DB.iColl = collectionName
-                                   , DB.iKey = map (=: (1 :: Int)) fieldList -- 1 is asc.
-                                   , DB.iName = fieldList2indexName fieldList
-                                   , DB.iUnique = True
-                                   , DB.iDropDups = False }
   liftIO $ putStrLn "  Dropping collection"
   _ <- DB.dropCollection collectionName
-  liftIO $ putStrLn "  Creating unique indexes"
-  mapM_ (DB.createIndex . mkIndex) indexFieldLists
+  mapM_ (mkUniqueIndex collectionName) indexFieldLists
   return ()
+
+mkUniqueIndex :: DB.Collection -> [Text] -> DB.Action IO ()
+mkUniqueIndex collectionName fieldList = do
+  let fieldList2indexName []     = error "Unique key with no field names"
+      fieldList2indexName (f:fs) = f ++ foldl' (\x y -> x ++ "_1_" ++ y) "" fs ++ "_1"
+  liftIO $ putStrLn "  Creating unique index"
+  DB.createIndex DB.Index { DB.iColl = collectionName
+                          , DB.iKey = map (=: (1 :: Int)) fieldList -- 1 is asc.
+                          , DB.iName = fieldList2indexName fieldList
+                          , DB.iUnique = True
+                          , DB.iDropDups = False }
 
 data CsvException
   = CsvError                   String -- ^ Generic exception
