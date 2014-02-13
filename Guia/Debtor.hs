@@ -19,6 +19,7 @@ module Guia.Debtor
          mandates,
          registrationDate,
          validDebtor,
+         validDebtorName,
 
          -- Mandate
          mkMandate,
@@ -28,8 +29,6 @@ module Guia.Debtor
          signatureDate,
          lastTimeActive,
          validMandate,
-         spanishIbanPrefixFromCcc,
-         cccControlDigits,
 
          -- SpanishBank
          mkSpanishBank,
@@ -80,13 +79,18 @@ mkDebtor firstName_ lastName_ mandates_ registrationDate_ =
 
 validDebtor :: Text -> Text -> [Mandate] -> T.Day -> Bool
 validDebtor firstName_ lastName_ mandates_ _registrationDate_ =
-     not (null firstName_) && length firstName_ <= maxFirstNameLength
-  && not (null lastName_)  && length lastName_  <= maxLastNameLength
-  && length lastName_  + length firstName_ <= maxFullNameLength
+     validDebtorName firstName_ lastName_
   && validMandateList mandates_
-  where maxFirstNameLength = 40
-        maxLastNameLength  = 60
-        maxFullNameLength  = 70 -- SEPA constraint (2.72)
+
+validDebtorName :: Text -> Text -> Bool
+validDebtorName firstName_ lastName_ =
+     not (null firstName_) && length firstName_ <= maxLengthFirstName
+  && not (null lastName_)  && length lastName_  <= maxLengthLastName
+  && length lastName_  + length firstName_      <= maxLengthFullName
+  where maxLengthFirstName = 40
+        maxLengthLastName  = 60
+        maxLengthFullName  = 70 -- SEPA constraint (2.72)
+
 
 -- | We want mandates ordered from more recent to oldest.
 validMandateList :: [Mandate] -> Bool
@@ -127,8 +131,8 @@ validSpanishBank :: Text -> Text -> Text -> Bool
 validSpanishBank fourDigitsCode_ bic_ bankName_ =
      length fourDigitsCode_ == 4 && all CH.isDigit fourDigitsCode_
   && validSpanishBankBic bic_
-  && length bankName_ <= maxBankName
-  where maxBankName = 100
+  && length bankName_ <= maxLengthBankName
+  where maxLengthBankName = 100
 
 validSpanishBankBic :: Text -> Bool
 validSpanishBankBic bic_ =   length bic_ == 11

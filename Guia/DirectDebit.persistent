@@ -1,0 +1,22 @@
+DirectDebitCollection         sql=direct_debit_collections
+  description                 Text                -- Determines file name
+  messageId                   Text                -- Immutable
+  creationTime                T.ZonedTime         -- Includes Day and TimeOfDay,
+                                                  -- applied to current TimeZone
+  creditor                    Creditor            -- Get a copy on construction
+  debits                      [DirectDebit]
+  
+  -- Unique constraints
+  UniqueDescription           description
+  deriving Read Show                              -- No Eq instance for T.ZonedTime
+
+
+DirectDebit                   sql=direct_debits
+  debtorFirstName             Text
+  debtorLastName              Text
+  mandate                     Mandate
+  items                       [BillingConcept]    -- May contain changed price
+  unstructured                Text                -- This may seem redundant, but permits
+                                                  -- regenerate the XML file in case whe
+                                                  -- change the algorithm.
+  deriving Eq Read Show

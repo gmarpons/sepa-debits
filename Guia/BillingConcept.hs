@@ -54,12 +54,12 @@ mkBillingConcept short long price vat =
 
 validBillingConcept :: Text -> Maybe Text -> Maybe Int -> Maybe Int -> Bool
 validBillingConcept short long price vat =
-     not (null short) && length short <= maxShortNameLength
-  && length long <= maxLongNameLength
+     not (null short) && length short <= maxLengthShortName
+  && length long <= maxLengthLongName
   && fromMaybe 0 price >= 0
   && fromMaybe 0 vat   >= 0
-  where maxShortNameLength = 8  -- To be able to concat many of them in a line
-        maxLongNameLength  = 70 -- GUI constraint
+  where maxLengthShortName = 8  -- To be able to concat many of them in a line
+        maxLengthLongName  = 70 -- GUI constraint
 
 -- | Getter for basePrice * vatRatio.
 finalPrice :: (Functor f, L.Contravariant f, L.Conjoined p) =>
