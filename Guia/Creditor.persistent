@@ -1,0 +1,6 @@
+Creditor                      sql=creditors
+  sepaId                      Text                -- Immutable
+  fullName                    Text                -- Immutable
+  creditorIban                Text                -- Immutable
+  messageCount                Int                 -- Part of messageId
+  deriving Eq Read Show
