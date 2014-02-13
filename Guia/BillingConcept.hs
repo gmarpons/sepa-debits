@@ -19,7 +19,8 @@ module Guia.BillingConcept
          basePrice,
          vatRatio,
          finalPrice,
-         validBillingConcept
+         validBillingConcept,
+         priceToText
        ) where
 
 import           ClassyPrelude
@@ -29,14 +30,6 @@ import qualified Control.Lens                                                   
   (Conjoined, Contravariant)
 import qualified Control.Lens.Getter                                            as L
   (to)
-import qualified Data.List                                                      as LT
-import qualified Data.Text.Read                                                 as TXT
-  (decimal)
-import qualified Data.Time.Calendar                                             as T
-import qualified Database.Persist.MongoDB                                       as DB
-  (Filter, Key, PersistEntityBackend,
-   PersistMonadBackend, PersistQuery,
-   deleteWhere, insert)
 import qualified Database.Persist.Quasi                                         as DB
   (lowerCaseSettings)
 import qualified Database.Persist.TH                                            as DB
@@ -53,23 +46,39 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 
 -- Billing concepts
 
-mkBillingConcept :: Text -> Maybe Text -> Maybe Double -> Maybe Double -> BillingConcept
+mkBillingConcept :: Text -> Maybe Text -> Maybe Int -> Maybe Int -> BillingConcept
 mkBillingConcept short long price vat =
   assert (validBillingConcept short long price vat)
   -- We set defaults for basePrice and vatRatio, if not given
-  $ BillingConcept short long (fromMaybe 0 price) (fromMaybe 0.21 vat)
+  $ BillingConcept short long (fromMaybe 0 price) (fromMaybe 21 vat)
 
-validBillingConcept :: Text -> Maybe Text -> Maybe Double -> Maybe Double -> Bool
-validBillingConcept short long _price _vat =
+validBillingConcept :: Text -> Maybe Text -> Maybe Int -> Maybe Int -> Bool
+validBillingConcept short long price vat =
      not (null short) && length short <= maxShortNameLength
   && length long <= maxLongNameLength
+  && fromMaybe 0 price >= 0
+  && fromMaybe 0 vat   >= 0
   where maxShortNameLength = 8  -- To be able to concat many of them in a line
         maxLongNameLength  = 70 -- GUI constraint
 
 -- | Getter for basePrice * vatRatio.
 finalPrice :: (Functor f, L.Contravariant f, L.Conjoined p) =>
-              p Double (f Double) -> p BillingConcept (f BillingConcept)
+              p Int (f Int) -> p BillingConcept (f BillingConcept)
 finalPrice = L.to _finalPrice
 
-_finalPrice :: BillingConcept -> Double
-_finalPrice concept = concept ^. basePrice * concept ^. vatRatio
+_finalPrice :: BillingConcept -> Int
+_finalPrice concept = concept ^. basePrice + vat
+  where vat = round $ toRational (concept ^. basePrice * concept ^. vatRatio) / 100
+
+-- | Helper function to convert any non-negative Int representing an amount * 100 (all
+-- across this module money amounts are stored in this way to avoid fractional digits) to
+-- text with two fractional digits.
+priceToText :: Int -> Text
+priceToText amount = assert (amount >= 0) $ pack amountWithFractional
+  where amountReversed = (reverse . show) amount
+        amountWithFractional = case amountReversed of
+          x : []         ->           "0.0" ++      [x]
+          x : y : []     ->           "0."  ++ (y : [x])
+          x : y : z : [] ->           z : '.' : y : [x]
+          x : y : l      -> reverse l ++ ('.' : y : [x])
+          _              -> error "priceToText: show has returned empty list for a number"

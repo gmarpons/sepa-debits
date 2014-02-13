@@ -17,16 +17,11 @@ module Guia.Creditor
          sepaId,
          fullName,
          creditorIban,
-         messageCount
+         messageCount,
+         validCreditor
        ) where
 
 import           ClassyPrelude
-import qualified Control.Lens                                                   as L
-  (Conjoined, Contravariant)
-import qualified Control.Lens.Getter                                            as L
-  (to)
-import qualified Data.Text.Read                                                 as TXT
-  (decimal)
 import qualified Database.Persist.Quasi                                         as DB
   (lowerCaseSettings)
 import qualified Database.Persist.TH                                            as DB
