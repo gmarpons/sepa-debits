@@ -1,0 +1,6 @@
+BillingConcept                sql=billing_concepts
+  shortName                   Text
+  longName                    Text Maybe
+  basePrice                   Double
+  vatRatio                    Double
+  deriving Eq Read Show
