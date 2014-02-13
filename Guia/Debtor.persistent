@@ -10,7 +10,7 @@ Mandate                       sql=mandates
   mandateRef                  Text                -- Immutable
   iban                        Text                -- Immutable
   signatureDate               T.Day               -- Immutable
-  lastTimeActive              T.Day Maybe
+  lastTimeActive              T.Day Maybe         -- 'Nothing' means new mandate
 
   -- Unique constraints
   UniqueMandateRef            mandateRef
@@ -18,8 +18,8 @@ Mandate                       sql=mandates
 
 
 SpanishBank                   sql=spanish_banks
-  fourDigitsCode              Text                  -- Immutable
-  bic                         Text                  -- Immutable, ISO 9362 (aka SWIFT-BIC, SWIFT ID or SWIFT code)
+  fourDigitsCode              Text                -- Immutable
+  bic                         Text                -- Immutable, ISO 9362 (aka SWIFT-BIC, SWIFT ID or SWIFT code)
   bankName                    Text
 
   -- Unique constraints

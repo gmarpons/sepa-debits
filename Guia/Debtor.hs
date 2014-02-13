@@ -54,6 +54,7 @@ import qualified Control.Lens.Getter                                            
   (to)
 import qualified Data.Char                                                      as CH
   (digitToInt, intToDigit, isDigit, isUpper)
+import qualified Data.List                                                      as LT
 import qualified Data.Text.Read                                                 as TXT
   (decimal)
 import qualified Data.Time.Calendar                                             as T
@@ -86,13 +87,26 @@ mkDebtor firstName_ lastName_ mandates_ registrationDate_ =
   $ Debtor firstName_ lastName_ mandates_ registrationDate_
 
 validDebtor :: Text -> Text -> [Mandate] -> T.Day -> Bool
-validDebtor firstName_ lastName_ _mandates_ _registrationDate_ =
+validDebtor firstName_ lastName_ mandates_ _registrationDate_ =
      not (null firstName_) && length firstName_ <= maxFirstNameLength
   && not (null lastName_)  && length lastName_  <= maxLastNameLength
   && length lastName_  + length firstName_ <= maxNameLength
+  && validMandateList mandates_
   where maxFirstNameLength = 40
         maxLastNameLength  = 40
         maxNameLength      = 70
+
+-- | We want mandates ordered from more recent to oldest.
+validMandateList :: [Mandate] -> Bool
+validMandateList mandates_ = LT.and lastTimePairs
+  where
+    lastTimeActiveList   = map (^. lastTimeActive) mandates_
+    lastTimeActiveList'  = Nothing : Nothing : lastTimeActiveList
+    lastTimeActiveList'' = Nothing : lastTimeActiveList'
+    lastTimePairs        = LT.zipWith newerThan lastTimeActiveList' lastTimeActiveList''
+    newerThan Nothing _           = True
+    newerThan (Just _) Nothing    = False
+    newerThan (Just d1) (Just d2) = T.diffDays d1 d2 >= 0
 
 
 -- Mandates
