@@ -103,7 +103,7 @@ validMandateList mandates_ = LT.and lastTimePairs
     lastTimeActiveList   = map (^. lastTimeActive) mandates_
     lastTimeActiveList'  = Nothing : Nothing : lastTimeActiveList
     lastTimeActiveList'' = Nothing : lastTimeActiveList'
-    lastTimePairs        = LT.zipWith newerThan lastTimeActiveList' lastTimeActiveList''
+    lastTimePairs        = LT.zipWith newerThan lastTimeActiveList'' lastTimeActiveList'
     newerThan Nothing _           = True
     newerThan (Just _) Nothing    = False
     newerThan (Just d1) (Just d2) = T.diffDays d1 d2 >= 0
