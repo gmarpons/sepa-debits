@@ -9,11 +9,11 @@
 
 module Guia.DirectDebitMessageXML where
 
-import           ClassyPrelude          hiding (Element, Text)
+import           ClassyPrelude    --      hiding (Text)
 import           Control.Lens
 import qualified Data.List                                                      as L
 import qualified Data.Map                                                       as M
-import           Data.Text.Lazy
+import qualified Data.Text.Lazy                                                 as LT
   (Text)
 import qualified Data.Time.Calendar                                             as T
 import           Guia.BillingConcept
@@ -39,14 +39,13 @@ message col = Document prologue root epilogue
     epilogue = []
 
 grpHdr :: DirectDebitCollection -> Node
-grpHdr col =
-  NodeElement $ Element "GrpHdr" M.empty (map ($ col) [msgId, creDtTm, nbOfTxs])
+grpHdr col = nodeElem "GrpHdr" (map ($ col) [msgId, creDtTm, nbOfTxs, ctrlSum])
 
 msgId :: DirectDebitCollection -> Node
-msgId col = NodeElement $ Element "MsgId" M.empty [NodeContent (col ^. messageId)]
+msgId col = nodeContent "MsgId" (col ^. messageId)
 
 creDtTm :: DirectDebitCollection -> Node
-creDtTm col = NodeElement $ Element "CreDtTm" M.empty [nodeDate, nodeT, nodeTime]
+creDtTm col = nodeElem "CreDtTm" [nodeDate, nodeT, nodeTime]
   where
     nodeDate     = NodeContent $ pack $ T.showGregorian (col ^. creationDay)
     nodeT        = NodeContent "T"
@@ -54,9 +53,38 @@ creDtTm col = NodeElement $ Element "CreDtTm" M.empty [nodeDate, nodeT, nodeTime
     (isoTime, _) = break (=='.') $ show (col ^. creationTimeOfDay)
 
 nbOfTxs :: DirectDebitCollection -> Node
-nbOfTxs col = NodeElement $ Element "NbOfTxs" M.empty []
+nbOfTxs col = nodeContent "NbOfTxs" (length (col ^. debits))
 
-renderMessage :: DirectDebitCollection -> Text
+ctrlSum :: DirectDebitCollection -> Node
+ctrlSum col = nodeContent "CtrlSum" content
+  where content = priceToText $ sumOf (debits.traverse.items.traverse.finalPrice) col
+
+
+-- Helper functions for nodes without attributes
+
+nodeElem :: Name -> [Node] -> Node
+nodeElem name nodes = NodeElement $ Element name M.empty nodes
+
+nodeContent :: Content c => Name -> c -> Node
+nodeContent name content
+  = NodeElement $ Element name M.empty [NodeContent (toContent content)]
+
+class Show c => Content c where
+  toContent :: c -> Text
+  toContent = pack . show
+
+instance Content Text where
+  toContent = id
+
+instance Content String where
+  toContent = pack
+
+instance Content Int
+
+
+-- Rendering and writing of messages
+
+renderMessage :: DirectDebitCollection -> LT.Text
 renderMessage col = renderText settings (message col)
   where
     settings = def { rsPretty = False }
@@ -72,21 +100,29 @@ writeMessageToFile col = do
 
 -- Test data
 
+ddc :: IO DirectDebitCollection
+ddc = do
+  (Just ddcE) <- DB.runDb $ DB.selectFirst ([] :: [DB.Filter DirectDebitCollection]) []
+  return $ DB.entityVal ddcE
+
 insertDDC :: IO ()
 insertDDC = DB.runDb $ do
   now <- liftIO T.getZonedTime
   liftIO $ putStrLn "Get creditor"
   (Just cE)  <- DB.selectFirst ([] :: [DB.Filter Creditor])       []
   liftIO $ putStrLn "Get debtor"
-  (Just dE)  <- DB.selectFirst ([] :: [DB.Filter Debtor])         []
+  dEL  <- DB.selectList ([] :: [DB.Filter Debtor])         []
   liftIO $ putStrLn "Get billing concept"
   bcEL       <- DB.selectList  ([] :: [DB.Filter BillingConcept]) []
   let c = DB.entityVal cE
-      d = DB.entityVal dE
-      (m1 : _) = d ^.. mandates.traversed
-      bcL = map DB.entityVal bcEL
-      dd = mkDirectDebit (d ^. firstName) (d ^. lastName) m1 bcL ""
-      ddc = mkDirectDebitCollection "New collection" now c [dd]
+      (d1 : d2 : _) = map DB.entityVal dEL
+      (m1 : _) = d1 ^.. mandates.traversed
+      (m2 : _) = d2 ^.. mandates.traversed
+      (bc1 : bc2 : _) = map DB.entityVal bcEL
+      dd1 = mkDirectDebit (d1 ^. firstName) (d1 ^. lastName) m1 [bc1, bc2] ""
+      dd2 = mkDirectDebit (d2 ^. firstName) (d2 ^. lastName) m2 [bc1] ""
+      ddc_ = mkDirectDebitCollection "New collection" now c [dd1, dd2]
   liftIO $ putStrLn "Insert"
-  DB.insert_ ddc
+  DB.deleteWhere ([] :: [DB.Filter DirectDebitCollection])
+  DB.insert_ ddc_
   return ()
