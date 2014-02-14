@@ -96,7 +96,7 @@ validDebits _debits_ = True
 -- | Check things that are not part of the invariant of the data type, but are necessary
 -- both to store in the database and to generate message file.
 storableDirectDebitCollection :: DirectDebitCollection -> IO Bool
-storableDirectDebitCollection ddc =
+storableDirectDebitCollection col =
   if validDirectDebitCollection descr creation_ creditor_ debits_
   then -- do
     -- zonedTime <- T.getZonedTime
@@ -105,10 +105,10 @@ storableDirectDebitCollection ddc =
     return $ storableDebits debits_
              {- && creationLocalTime `before` currentLocalTime-}
   else return False             -- storable implies valid
-  where descr      = ddc ^. description
-        creation_  = ddc ^. creationTime
-        creditor_  = ddc ^. creditor
-        debits_    = ddc ^. debits
+  where descr      = col ^. description
+        creation_  = col ^. creationTime
+        creditor_  = col ^. creditor
+        debits_    = col ^. debits
         -- today             = T.localDay currentLocalTime
         -- now               = T.localTimeOfDay currentLocalTime
         -- creationDay       = T.localDay creationLocalTime
