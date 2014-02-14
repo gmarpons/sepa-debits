@@ -18,9 +18,8 @@ module Guia.SpanishIban
 
 import           ClassyPrelude
 import qualified Control.Lens                                                   as L
-  (Conjoined, Contravariant)
-import qualified Control.Lens.Getter                                            as L
-  (to)
+  (Conjoined, Gettable,
+   to)
 import qualified Data.Char                                                      as CH
   (digitToInt, intToDigit, isDigit)
 import qualified Data.Text.Read                                                 as TXT
@@ -30,8 +29,7 @@ import qualified Text.Printf                                                    
 
 
 -- | Getter for the four digits code for banks.
-bank :: (Functor f, L.Contravariant f, L.Conjoined p) =>
-          p Text (f Text) -> p Text (f Text)
+bank :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
 bank = L.to _bank
 
 _bank :: Text -> Text
@@ -40,8 +38,7 @@ _bank iban = assert (validSpanishIban iban) bankCode
         (bankCode, _)        = splitAt 4 ccc
 
 -- | Getter for the four digits code for bank offices.
-office :: (Functor f, L.Contravariant f, L.Conjoined p) =>
-          p Text (f Text) -> p Text (f Text)
+office :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
 office = L.to _office
 
 _office :: Text -> Text

@@ -19,6 +19,8 @@ module Guia.DirectDebit
          creationTime,
          creditor,
          debits,
+         creationDay,
+         creationTimeOfDay,
          validDirectDebitCollection,
          storableDirectDebitCollection,
          storableDebits,
@@ -77,9 +79,12 @@ mkMessageId creation_ creditor_ = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ counte
     (hhmmss', milis') = break (== '.') $ show (T.localTimeOfDay localTime)
     hhmmss            = pack $ filter (/= ':') hhmmss'
     milis             = pack $ take 5 $ dropWhile (== '.') (milis' ++ repeat '0')
-                        -- messageCount is updated elsewhere
+                        -- TODO: messageCount is updated elsewhere
     counter           = pack $ PF.printf "%013d" (creditor_ ^. messageCount)
-    localTime = T.zonedTimeToLocalTime creation_
+
+    -- A LocalTime contains only a Day and a TimeOfDay, so messageId generation doesn't
+    -- depend on the local time zone.
+    localTime =       T.zonedTimeToLocalTime creation_
 
 -- Cannot check meaningful creation date outside IO
 validDirectDebitCollection :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> Bool
@@ -98,22 +103,17 @@ validDebits _debits_ = True
 storableDirectDebitCollection :: DirectDebitCollection -> IO Bool
 storableDirectDebitCollection col =
   if validDirectDebitCollection descr creation_ creditor_ debits_
-  then -- do
-    -- zonedTime <- T.getZonedTime
-    -- let currentLocalTime  = T.zonedTimeToLocalTime zonedTime
-    --     creationLocalTime = T.zonedTimeToLocalTime creation_
-    return $ storableDebits debits_
-             {- && creationLocalTime `before` currentLocalTime-}
+  then do
+    zonedTime <- T.getZonedTime
+    let currentLocalTime  = T.zonedTimeToLocalTime zonedTime
+        creationLocalTime = T.zonedTimeToLocalTime creation_
+    -- FIXME: problem if creation and validation in different time zones
+    return $ creationLocalTime <= currentLocalTime && storableDebits debits_
   else return False             -- storable implies valid
   where descr      = col ^. description
         creation_  = col ^. creationTime
         creditor_  = col ^. creditor
         debits_    = col ^. debits
-        -- today             = T.localDay currentLocalTime
-        -- now               = T.localTimeOfDay currentLocalTime
-        -- creationDay       = T.localDay creationLocalTime
-        -- creationTimeOfDay = T.localTimeOfDay creationLocalTime
-        -- before t1 t2 =
 
 storableDebits :: [DirectDebit] -> Bool
 storableDebits debits_ =
@@ -123,6 +123,20 @@ storableDebits debits_ =
      -- All debit instructions have items
   && all (not . null) (debits_ ^.. traversed.items)
   where allMandateRefs = debits_ ^.. traversed.mandate.mandateRef
+
+creationDay :: (Gettable f, Conjoined p) =>
+               p T.Day (f T.Day) -> p DirectDebitCollection (f DirectDebitCollection)
+creationDay = to _creationDay
+
+_creationDay :: DirectDebitCollection -> T.Day
+_creationDay col = T.localDay (T.zonedTimeToLocalTime (col ^. creationTime))
+
+creationTimeOfDay :: (Gettable f, Conjoined p) =>
+                     p T.Day (f T.Day) -> p DirectDebitCollection (f DirectDebitCollection)
+creationTimeOfDay = to _creationDay
+
+_creationTimeOfDay :: DirectDebitCollection -> T.TimeOfDay
+_creationTimeOfDay col = T.localTimeOfDay (T.zonedTimeToLocalTime (col ^. creationTime))
 
 
 -- Direct debit instructions
