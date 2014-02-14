@@ -2,5 +2,7 @@ Creditor                      sql=creditors
   sepaId                      Text                -- Immutable
   fullName                    Text                -- Immutable
   creditorIban                Text                -- Immutable
-  messageCount                Int                 -- Part of messageId
+  messageCount                Int                 -- Used in
+                                                  -- DirectDebitCollection.messageId
+                                                  -- Stores the next number to use.
   deriving Eq Read Show

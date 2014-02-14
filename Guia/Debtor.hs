@@ -55,7 +55,7 @@ import qualified Database.Persist.MongoDB                                       
    PersistMonadBackend, PersistQuery,
    deleteWhere, insert)
 import qualified Database.Persist.Quasi                                         as DB
-  (lowerCaseSettings)
+  (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
 import           Guia.MongoSettings
@@ -67,7 +67,7 @@ import           Guia.SpanishIban
 -- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
-  $(DB.persistFileWith DB.lowerCaseSettings "Guia/Debtor.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Guia/Debtor.persistent")
 
 
 -- Debtors

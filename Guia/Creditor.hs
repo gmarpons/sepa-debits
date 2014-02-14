@@ -23,7 +23,7 @@ module Guia.Creditor
 
 import           ClassyPrelude
 import qualified Database.Persist.Quasi                                         as DB
-  (lowerCaseSettings)
+  (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
 import           Guia.MongoSettings
@@ -34,7 +34,7 @@ import           Guia.SpanishIban
 -- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
-  $(DB.persistFileWith DB.lowerCaseSettings "Guia/Creditor.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Guia/Creditor.persistent")
 
 
 -- Creditors

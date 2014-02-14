@@ -61,12 +61,13 @@ import qualified Database.MongoDB.Admin                                         
    createIndex, dropCollection)
 import qualified Database.Persist.MongoDB                                       as DB
 import qualified Database.Persist.Quasi                                         as DB
-  (lowerCaseSettings)
+  (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
 import           Guia.Debtor
 import           Guia.MongoSettings
 import           Guia.MongoUtils
+import           Guia.SpanishIban
 import qualified System.IO                                                      as IO
   (IOMode(ReadMode),
    openFile)
@@ -76,7 +77,7 @@ import qualified Text.Printf                                                    
 
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = True }]
-  $(DB.persistFileWith DB.lowerCaseSettings "Guia/CsvImport.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Guia/CsvImport.persistent")
 
 
 -- Datatypes for CSV data

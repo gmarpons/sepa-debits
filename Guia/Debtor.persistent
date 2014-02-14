@@ -19,7 +19,8 @@ Mandate                       sql=mandates
 
 SpanishBank                   sql=spanish_banks
   fourDigitsCode              Text                -- Immutable
-  bic                         Text                -- Immutable, ISO 9362 (aka SWIFT-BIC, SWIFT ID or SWIFT code)
+  bic                         Text                -- Immutable, ISO 9362 (aka SWIFT-BIC,
+                                                  -- SWIFT ID or SWIFT code)
   bankName                    Text
 
   -- Unique constraints

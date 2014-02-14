@@ -42,7 +42,7 @@ import qualified Data.List                                                      
 import qualified Data.Time.Calendar                                             as T
 import qualified Data.Time.LocalTime                                            as T
 import qualified Database.Persist.Quasi                                         as DB
-  (lowerCaseSettings)
+  (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
 import           Guia.BillingConcept
@@ -56,7 +56,7 @@ import qualified Text.Printf                                                    
 -- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
-  $(DB.persistFileWith DB.lowerCaseSettings "Guia/DirectDebit.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Guia/DirectDebit.persistent")
 
 
 -- Direct debit instruction collection

@@ -31,7 +31,7 @@ import qualified Control.Lens                                                   
 import qualified Control.Lens.Getter                                            as L
   (to)
 import qualified Database.Persist.Quasi                                         as DB
-  (lowerCaseSettings)
+  (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
 import           Guia.MongoSettings
@@ -41,7 +41,7 @@ import           Guia.MongoSettings
 -- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
-  $(DB.persistFileWith DB.lowerCaseSettings "Guia/BillingConcept.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Guia/BillingConcept.persistent")
 
 
 -- Billing concepts
