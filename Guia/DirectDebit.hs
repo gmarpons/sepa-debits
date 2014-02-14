@@ -132,8 +132,9 @@ _creationDay :: DirectDebitCollection -> T.Day
 _creationDay col = T.localDay (T.zonedTimeToLocalTime (col ^. creationTime))
 
 creationTimeOfDay :: (Gettable f, Conjoined p) =>
-                     p T.Day (f T.Day) -> p DirectDebitCollection (f DirectDebitCollection)
-creationTimeOfDay = to _creationDay
+                     p T.TimeOfDay (f T.TimeOfDay) ->
+                     p DirectDebitCollection (f DirectDebitCollection)
+creationTimeOfDay = to _creationTimeOfDay
 
 _creationTimeOfDay :: DirectDebitCollection -> T.TimeOfDay
 _creationTimeOfDay col = T.localTimeOfDay (T.zonedTimeToLocalTime (col ^. creationTime))

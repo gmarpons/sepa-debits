@@ -13,7 +13,9 @@ import           ClassyPrelude          hiding (Element, Text)
 import           Control.Lens
 import qualified Data.List                                                      as L
 import qualified Data.Map                                                       as M
-import           Data.Text.Lazy         hiding (map)
+import           Data.Text.Lazy
+  (Text)
+import qualified Data.Time.Calendar                                             as T
 import           Guia.BillingConcept
 import           Guia.Creditor
 import           Guia.Debtor
@@ -37,13 +39,19 @@ message col = Document prologue root epilogue
     epilogue = []
 
 grpHdr :: DirectDebitCollection -> Node
-grpHdr col = NodeElement $ Element "GrpHdr" M.empty (map ($ col) [msgId, creDtTm, nbOfTxs])
+grpHdr col =
+  NodeElement $ Element "GrpHdr" M.empty (map ($ col) [msgId, creDtTm, nbOfTxs])
 
 msgId :: DirectDebitCollection -> Node
 msgId col = NodeElement $ Element "MsgId" M.empty [NodeContent (col ^. messageId)]
 
 creDtTm :: DirectDebitCollection -> Node
-creDtTm col = NodeElement $ Element "CreDtTm" M.empty []
+creDtTm col = NodeElement $ Element "CreDtTm" M.empty [nodeDate, nodeT, nodeTime]
+  where
+    nodeDate     = NodeContent $ pack $ T.showGregorian (col ^. creationDay)
+    nodeT        = NodeContent "T"
+    nodeTime     = NodeContent $ pack isoTime
+    (isoTime, _) = break (=='.') $ show (col ^. creationTimeOfDay)
 
 nbOfTxs :: DirectDebitCollection -> Node
 nbOfTxs col = NodeElement $ Element "NbOfTxs" M.empty []
@@ -60,7 +68,6 @@ writeMessageToFile col = do
   -- TODO: handle possible error
   let (Just xmlParsedLight) = LXML.parseXMLDoc (renderMessage col)
   writeFile "Test.xml" (LXML.ppTopElement xmlParsedLight)
-
 
 
 -- Test data
