@@ -68,9 +68,21 @@ mkDirectDebitCollection descr creation_ creditor_ debits_ =
   $ DirectDebitCollection descr messageId_ creation_ creditor_ debits_
   where messageId_ = mkMessageId creation_ creditor_
 
+-- | Creates a SEPA message Id following Spanish Q19.14 instructions. Its construction
+-- guarantees the SEPA constraint of exactly 35 alphanumeric characters.
+mkMessageId :: T.ZonedTime -> Creditor -> Text
+mkMessageId creation_ creditor_ = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ counter
+  where
+    yyyymmdd          = pack $ filter (/= '-') $ T.showGregorian (T.localDay localTime)
+    (hhmmss', milis') = break (== '.') $ show (T.localTimeOfDay localTime)
+    hhmmss            = pack $ filter (/= ':') hhmmss'
+    milis             = pack $ take 5 $ dropWhile (== '.') (milis' ++ repeat '0')
+                        -- messageCount is updated elsewhere
+    counter           = pack $ PF.printf "%013d" (creditor_ ^. messageCount)
+    localTime = T.zonedTimeToLocalTime creation_
+
 -- Cannot check meaningful creation date outside IO
-validDirectDebitCollection :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] ->
-                              Bool
+validDirectDebitCollection :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> Bool
 validDirectDebitCollection  descr creation_ creditor_ debits_ =
      not (null descr) && length descr <= maxLengthDescr
   && length (mkMessageId creation_ creditor_) == lengthMessageId
@@ -111,17 +123,6 @@ storableDebits debits_ =
      -- All debit instructions have items
   && all (not . null) (debits_ ^.. traversed.items)
   where allMandateRefs = debits_ ^.. traversed.mandate.mandateRef
-
--- | Creates a SEPA message Id following Spanish Q19.14 instructions. Its construction
--- guarantees the SEPA constraint of exactly 35 alphanumeric characters.
-mkMessageId :: T.ZonedTime -> Creditor -> Text
-mkMessageId creation_ creditor_ = "PRE" ++ dateText ++ timeText ++ milis ++ counter
-  where
-    dateText  = pack $ filter (/= '-') $ T.showGregorian (T.localDay localTime)
-    timeText  = pack $ filter (/= ':') $ show (T.localTimeOfDay localTime)
-    milis     = "00000"
-    counter   = pack $ PF.printf "%013d" (creditor_ ^. messageCount)
-    localTime = T.zonedTimeToLocalTime creation_
 
 
 -- Direct debit instructions
