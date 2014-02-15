@@ -32,12 +32,12 @@ import qualified Guia.MongoUtils as DB
 import qualified Data.Time.LocalTime as T
 
 message :: DirectDebitSet -> Document
-message col = Document prologue root epilogue
+message dds = Document prologue root epilogue
   where
     prologue = Prologue [] Nothing []
-    root = Element "CstmrDrctDbtInitn" M.empty (map ($ col) content)
+    root = Element "CstmrDrctDbtInitn" M.empty content
     epilogue = []
-    content = grpHdr : []
+    content = [grpHdr dds, fst (pmtInfP dds), snd (pmtInfP dds)]
 
 grpHdr :: DirectDebitSet -> Node                                      -- +
 grpHdr = nodeElem "GrpHdr" content
@@ -45,31 +45,37 @@ grpHdr = nodeElem "GrpHdr" content
     content = [msgId, creDtTm, nbOfTxs, ctrlSum, initgPty]
 
 msgId :: DirectDebitSet -> Node                                       -- ++
-msgId col = nodeContent "MsgId" (col ^. messageId)
+msgId dds = nodeContent "MsgId" (dds ^. messageId)
 
 creDtTm :: DirectDebitSet -> Node                                     -- ++
-creDtTm col = nodeContent "CreDtTm" (isoDate ++ "T" ++ isoTime)
+creDtTm dds = nodeContent "CreDtTm" (isoDate ++ "T" ++ isoTime)
   where
-    isoDate      = T.showGregorian (col ^. creationDay)
-    (isoTime, _) = break (=='.') $ show (col ^. creationTimeOfDay)
+    isoDate      = T.showGregorian (dds ^. creationDay)
+    (isoTime, _) = break (=='.') $ show (dds ^. creationTimeOfDay)
 
 nbOfTxs :: DirectDebitSet -> Node                                     -- ++
-nbOfTxs col = nodeContent "NbOfTxs" (length (col ^. debits))
+nbOfTxs dds = nodeContent "NbOfTxs" (length (dds ^. debits))
 
 ctrlSum :: DirectDebitSet -> Node                                     -- ++
-ctrlSum col = nodeContent "CtrlSum" content
-  where content = priceToText $ sumOf (debits.traverse.items.traverse.finalPrice) col
+ctrlSum dds = nodeContent "CtrlSum" content
+  where content = priceToText $ sumOf (debits.traverse.items.traverse.finalPrice) dds
 
 initgPty :: DirectDebitSet -> Node                                    -- ++
-initgPty col = nodeElem "InitgPty" content (col ^. creditor)
+initgPty dds = nodeElem "InitgPty" content (dds ^. creditor)
   where
     content = [nm]
 
 nm :: Creditor -> Node                                                -- +++
 nm creditor_ = nodeContent "Nm" (creditor_ ^. fullName)
 
--- pmtInf_L :: DirectDebitSet -> [Node]                               -- +
--- pmtInf_L col = 
+-- | Returns a pair of nodes of type "PmtInf", one for new mandates and another for old
+-- ones.
+pmtInfP :: DirectDebitSet -> (Node, Node)                            -- +
+pmtInfP dds =
+  over both (pmtInf dds) $ span (^. isNew) (dds ^.. debits.traverse.mandate)
+
+pmtInf :: DirectDebitSet -> [Mandate] -> Node
+pmtInf dds mL = nodeContent "hola" ("hola" :: Text)
 
 
 
@@ -101,28 +107,28 @@ instance Content Int
 -- Rendering and writing of messages
 
 renderMessage :: DirectDebitSet -> LT.Text
-renderMessage col = renderText settings (message col)
+renderMessage dds = renderText settings (message dds)
   where
     settings = def { rsPretty = False }
 
 -- | Write direct debits instructions message to XML file, with a decent pretty-printer
 -- (the one coming with Text.XML puts significant whitespace in content nodes).
 writeMessageToFile :: DirectDebitSet -> IO ()
-writeMessageToFile col = do
+writeMessageToFile dds = do
   -- TODO: handle possible error
-  let (Just xmlParsedLight) = LXML.parseXMLDoc (renderMessage col)
+  let (Just xmlParsedLight) = LXML.parseXMLDoc (renderMessage dds)
   writeFile "Test.xml" (LXML.ppTopElement xmlParsedLight)
 
 
 -- Test data
 
-ddc :: IO DirectDebitSet
-ddc = do
-  (Just ddcE) <- DB.runDb $ DB.selectFirst ([] :: [DB.Filter DirectDebitSet]) []
-  return $ DB.entityVal ddcE
+dds_ :: IO DirectDebitSet
+dds_ = do
+  (Just ddsE) <- DB.runDb $ DB.selectFirst ([] :: [DB.Filter DirectDebitSet]) []
+  return $ DB.entityVal ddsE
 
-insertDDC :: IO ()
-insertDDC = DB.runDb $ do
+insertDDS :: IO ()
+insertDDS = DB.runDb $ do
   now <- liftIO T.getZonedTime
   liftIO $ putStrLn "Get creditor"
   (Just cE)  <- DB.selectFirst ([] :: [DB.Filter Creditor])       []
@@ -137,8 +143,8 @@ insertDDC = DB.runDb $ do
       (bc1 : bc2 : _) = map DB.entityVal bcEL
       dd1 = mkDirectDebit (d1 ^. firstName) (d1 ^. lastName) m1 [bc1, bc2] ""
       dd2 = mkDirectDebit (d2 ^. firstName) (d2 ^. lastName) m2 [bc1] ""
-      ddc_ = mkDirectDebitSet "New collection" now c [dd1, dd2]
+      dds = mkDirectDebitSet "New DdSet" now c [dd1, dd2]
   liftIO $ putStrLn "Insert"
   DB.deleteWhere ([] :: [DB.Filter DirectDebitSet])
-  DB.insert_ ddc_
+  DB.insert_ dds
   return ()

@@ -11,7 +11,7 @@
   #-}
 
 module Guia.DirectDebit
-       ( -- Direct debit instructions collection
+       ( -- Direct debit instructions set
          mkDirectDebitSet,
          DirectDebitSet, DirectDebitSetId,
          description,
@@ -61,7 +61,7 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
   $(DB.persistFileWith DB.upperCaseSettings "Guia/DirectDebit.persistent")
 
 
--- Direct debit instruction collection
+-- Direct debit instruction set
 
 mkDirectDebitSet :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> DirectDebitSet
 mkDirectDebitSet descr creation_ creditor_ debits_ =

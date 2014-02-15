@@ -73,6 +73,7 @@ import qualified System.IO                                                      
    openFile)
 import qualified Text.Printf                                                    as PF
 
+
 -- Persistent collections
 
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
