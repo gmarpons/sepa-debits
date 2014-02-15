@@ -20,6 +20,7 @@ module Guia.Debtor
          registrationDate,
          validDebtor,
          validDebtorName,
+         getActiveMandate,
 
          -- Mandate
          mkMandate,
@@ -28,6 +29,7 @@ module Guia.Debtor
          iban,
          signatureDate,
          lastTimeActive,
+         isNew,
          validMandate,
 
          -- SpanishBank
@@ -45,7 +47,8 @@ module Guia.Debtor
 
 import           ClassyPrelude
 import           Control.Lens
-  ((^.))
+  (Conjoined, Gettable,
+   (^.), to)
 import qualified Data.Char                                                      as CH
   (isDigit, isUpper)
 import qualified Data.List                                                      as LT
@@ -104,6 +107,20 @@ validMandateList mandates_ = LT.and lastTimePairs
     newerThan (Just _) Nothing    = False
     newerThan (Just d1) (Just d2) = T.diffDays d1 d2 >= 0
 
+getActiveMandate :: T.Day -> Debtor -> Maybe Mandate
+getActiveMandate today debtor =
+  -- Better pass today as an argument, to not make a lot of system calls.
+  -- zonedTime <- T.getZonedTime
+  -- let today  = T.localDay (T.zonedTimeToLocalTime zonedTime)
+
+  -- Mandates are ordered, with most recently active first
+  case debtor ^. mandates of
+    (mandate : _) -> case mandate ^. lastTimeActive of
+      -- 36 months == 3 years
+      Just lta -> if lta > T.addDays (3 * 365) today then Just mandate else Nothing
+      Nothing  -> Just mandate
+    []            -> Nothing    -- No mandates yet
+
 
 -- Mandates
 
@@ -113,11 +130,17 @@ mkMandate ref iban_ signatureDate_ lastTimeActive_ =
   $ Mandate ref iban_ signatureDate_ lastTimeActive_
 
 -- In fact more characters are allowed in mandate reference code (but not all), but for
-  -- simplicity we constraint us to digits + space.
+-- simplicity we constraint us to digits + space.
 validMandate :: Text -> Text -> T.Day -> Maybe T.Day -> Bool
 validMandate ref iban_ _signatureDate_ _lastTimeActive_ =
      length ref == 35 && all (\c -> CH.isDigit c || c == ' ') ref
   && validSpanishIban iban_
+
+isNew :: (Gettable f, Conjoined p) => p Bool (f Bool) -> p Mandate (f Mandate)
+isNew = to _isNew
+
+_isNew :: Mandate -> Bool
+_isNew = isNothing . (^. lastTimeActive)
 
 
 -- Spanish banks
@@ -144,6 +167,9 @@ validSpanishBankBic bic_ =   length bic_ == 11
         (country, suffix')    = splitAt 2 suffix
         (location, branch)    = splitAt 2 suffix'
         isDigitOrUpper c      = CH.isDigit c || CH.isUpper c
+
+
+-- Old stuff, deprecated
 
 insertDebtor :: Debtor -> IO (DB.Key Debtor)
 insertDebtor debtor = runDb $ DB.insert debtor
