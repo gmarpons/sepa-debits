@@ -1,4 +1,4 @@
-DirectDebitCollection         sql=direct_debit_collections
+DirectDebitSet                sql=direct_debit_set
   description                 Text                -- Determines file name
   messageId                   Text                -- Immutable
   creationTime                T.ZonedTime         -- Includes Day and TimeOfDay,

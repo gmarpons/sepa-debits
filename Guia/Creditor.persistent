@@ -3,6 +3,6 @@ Creditor                      sql=creditors
   fullName                    Text                -- Immutable
   creditorIban                Text                -- Immutable
   messageCount                Int                 -- Used in
-                                                  -- DirectDebitCollection.messageId
+                                                  -- DirectDebitSet.messageId
                                                   -- Stores the next number to use.
   deriving Eq Read Show

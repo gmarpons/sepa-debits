@@ -12,8 +12,8 @@
 
 module Guia.DirectDebit
        ( -- Direct debit instructions collection
-         mkDirectDebitCollection,
-         DirectDebitCollection, DirectDebitCollectionId,
+         mkDirectDebitSet,
+         DirectDebitSet, DirectDebitSetId,
          description,
          messageId,
          creationTime,
@@ -21,8 +21,8 @@ module Guia.DirectDebit
          debits,
          creationDay,
          creationTimeOfDay,
-         validDirectDebitCollection,
-         storableDirectDebitCollection,
+         validDirectDebitSet,
+         storableDirectDebitSet,
          storableDebits,
          mkMessageId,
 
@@ -63,11 +63,10 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 
 -- Direct debit instruction collection
 
-mkDirectDebitCollection :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] ->
-                           DirectDebitCollection
-mkDirectDebitCollection descr creation_ creditor_ debits_ =
-  assert (validDirectDebitCollection descr creation_ creditor_ debits_)
-  $ DirectDebitCollection descr messageId_ creation_ creditor_ debits_
+mkDirectDebitSet :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> DirectDebitSet
+mkDirectDebitSet descr creation_ creditor_ debits_ =
+  assert (validDirectDebitSet descr creation_ creditor_ debits_)
+  $ DirectDebitSet descr messageId_ creation_ creditor_ debits_
   where messageId_ = mkMessageId creation_ creditor_
 
 -- | Creates a SEPA message Id following Spanish Q19.14 instructions. Its construction
@@ -87,8 +86,8 @@ mkMessageId creation_ creditor_ = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ counte
     localTime =       T.zonedTimeToLocalTime creation_
 
 -- Cannot check meaningful creation date outside IO
-validDirectDebitCollection :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> Bool
-validDirectDebitCollection  descr creation_ creditor_ debits_ =
+validDirectDebitSet :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> Bool
+validDirectDebitSet  descr creation_ creditor_ debits_ =
      not (null descr) && length descr <= maxLengthDescr
   && length (mkMessageId creation_ creditor_) == lengthMessageId
   && validDebits debits_
@@ -100,9 +99,9 @@ validDebits _debits_ = True
 
 -- | Check things that are not part of the invariant of the data type, but are necessary
 -- both to store in the database and to generate message file.
-storableDirectDebitCollection :: DirectDebitCollection -> IO Bool
-storableDirectDebitCollection col =
-  if validDirectDebitCollection descr creation_ creditor_ debits_
+storableDirectDebitSet :: DirectDebitSet -> IO Bool
+storableDirectDebitSet col =
+  if validDirectDebitSet descr creation_ creditor_ debits_
   then do
     zonedTime <- T.getZonedTime
     let currentLocalTime  = T.zonedTimeToLocalTime zonedTime
@@ -125,18 +124,17 @@ storableDebits debits_ =
   where allMandateRefs = debits_ ^.. traversed.mandate.mandateRef
 
 creationDay :: (Gettable f, Conjoined p) =>
-               p T.Day (f T.Day) -> p DirectDebitCollection (f DirectDebitCollection)
+               p T.Day (f T.Day) -> p DirectDebitSet (f DirectDebitSet)
 creationDay = to _creationDay
 
-_creationDay :: DirectDebitCollection -> T.Day
+_creationDay :: DirectDebitSet -> T.Day
 _creationDay col = T.localDay (T.zonedTimeToLocalTime (col ^. creationTime))
 
 creationTimeOfDay :: (Gettable f, Conjoined p) =>
-                     p T.TimeOfDay (f T.TimeOfDay) ->
-                     p DirectDebitCollection (f DirectDebitCollection)
+                     p T.TimeOfDay (f T.TimeOfDay) -> p DirectDebitSet (f DirectDebitSet)
 creationTimeOfDay = to _creationTimeOfDay
 
-_creationTimeOfDay :: DirectDebitCollection -> T.TimeOfDay
+_creationTimeOfDay :: DirectDebitSet -> T.TimeOfDay
 _creationTimeOfDay col = T.localTimeOfDay (T.zonedTimeToLocalTime (col ^. creationTime))
 
 
