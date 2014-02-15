@@ -10,6 +10,7 @@
 module Guia.DirectDebitMessageXML where
 
 import           ClassyPrelude    --      hiding (Text)
+import           Control.Arrow
 import           Control.Lens
 -- import qualified Data.List                                                      as L
 import qualified Data.Map                                                       as M
@@ -37,12 +38,12 @@ message dds = Document prologue root epilogue
     prologue = Prologue [] Nothing []
     root = Element "CstmrDrctDbtInitn" M.empty content
     epilogue = []
-    content = [grpHdr dds, fst (pmtInfP dds), snd (pmtInfP dds)]
+    content = grpHdr dds : pmtInfL dds
 
 grpHdr :: DirectDebitSet -> Node                                      -- +
-grpHdr = nodeElem "GrpHdr" content
+grpHdr dds = nodeElem "GrpHdr" subnodes
   where
-    content = [msgId, creDtTm, nbOfTxs, ctrlSum, initgPty]
+    subnodes = [msgId dds, creDtTm dds, nbOfTxs dds, ctrlSum dds, initgPty dds]
 
 msgId :: DirectDebitSet -> Node                                       -- ++
 msgId dds = nodeContent "MsgId" (dds ^. messageId)
@@ -61,28 +62,37 @@ ctrlSum dds = nodeContent "CtrlSum" content
   where content = priceToText $ sumOf (debits.traverse.items.traverse.finalPrice) dds
 
 initgPty :: DirectDebitSet -> Node                                    -- ++
-initgPty dds = nodeElem "InitgPty" content (dds ^. creditor)
-  where
-    content = [nm]
+initgPty dds = nodeElem "InitgPty" [nm (dds ^. creditor)]
 
 nm :: Creditor -> Node                                                -- +++
 nm creditor_ = nodeContent "Nm" (creditor_ ^. fullName)
 
--- | Returns a pair of nodes of type "PmtInf", one for new mandates and another for old
--- ones.
-pmtInfP :: DirectDebitSet -> (Node, Node)                            -- +
-pmtInfP dds =
-  over both (pmtInf dds) $ span (^. isNew) (dds ^.. debits.traverse.mandate)
+-- | Returns one or two nodes of type "PmtInf", one for debits with new mandates and
+-- another for old ones.
+pmtInfL :: DirectDebitSet -> [Node]                                   -- +
+pmtInfL dds =
+  concat $ (pmtInf' True new, pmtInf' False old) ^.. both
+  where
+    -- Use of lenses and list comprehensions
+    (new, old) = span (^. mandate.isNew) (dds ^.. debits.traverse)
+    pmtInf' areNew ddL = [pmtInf areNew ddL dds | not (null ddL)]
 
-pmtInf :: DirectDebitSet -> [Mandate] -> Node
-pmtInf dds mL = nodeContent "hola" ("hola" :: Text)
+pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> Node
+pmtInf areNew ddL dds = nodeElem "pmtInf" subnodes
+  where
+    subnodes = [pmtInfId areNew dds]
 
+pmtInfId :: Bool -> DirectDebitSet -> Node
+pmtInfId areNew dds = nodeContent "MsgId" paymentId
+  where
+    paymentId = prefix ++ drop 3 (dds ^. messageId)
+    prefix    = if areNew then "FST" else "REC"
 
 
 -- Helper functions for nodes without attributes
 
-nodeElem :: Name -> [a -> Node] -> a -> Node
-nodeElem name funcs parent = NodeElement $ Element name M.empty (map ($ parent) funcs)
+nodeElem :: Name -> [Node] -> Node
+nodeElem name subnodes  = NodeElement $ Element name M.empty subnodes
 
 nodeContent :: Content c => Name -> c -> Node
 nodeContent name content
