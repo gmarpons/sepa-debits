@@ -47,8 +47,8 @@ mkCreditor id_ name iban count =
 validCreditor :: Text -> Text -> Text -> Int -> Bool
 validCreditor id_ name iban count =
      length id_ == 16
-  && not (null name) && length name <= maxLengthFullName
+  && not (null name) && length name <= maxLengthFullName -- SEPA constraints
   && validSpanishIban iban
   && count >= 0
   where
-    maxLengthFullName = 70      -- SEPA contraint
+    maxLengthFullName = 70      -- SEPA constraint

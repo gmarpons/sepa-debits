@@ -34,15 +34,20 @@ import qualified Guia.MongoUtils as DB
 import qualified Data.Time.LocalTime as T
 
 
+-- Type synonims
+
+type BankMap = M.Map Text SpanishBank
+  
+
 -- Recursive transformation DirectDebitSet -> Document
 
-message :: DirectDebitSet -> Document                                 -- *
-message dds = Document prologue root epilogue
+message :: DirectDebitSet -> BankMap -> Document                      -- *
+message dds bkL = Document prologue root epilogue
   where
     prologue = Prologue [] Nothing []
     root     = Element "CstmrDrctDbtInitn" M.empty subnodes
     epilogue = []
-    subnodes = grpHdr dds : pmtInf_L dds
+    subnodes = grpHdr dds : pmtInf_L dds bkL
 
 grpHdr :: DirectDebitSet -> Node                                      -- +
 grpHdr dds = nodeElem "GrpHdr" subnodes
@@ -62,7 +67,7 @@ creDtTm dds = nodeContent "CreDtTm" (isoDate ++ "T" ++ isoTime)
 nbOfTxs_1_6 :: DirectDebitSet -> Node                                 -- ++
 nbOfTxs_1_6 dds = nodeContent "NbOfTxs" (length (dds ^. debits))
 
-ctrlSum_1_7 :: [DirectDebit] -> Node                                 -- ++
+ctrlSum_1_7 :: [DirectDebit] -> Node                                  -- ++
 ctrlSum_1_7 =
   nodeContent "CtrlSum" . priceToText . sumOf (traverse.items.traverse.finalPrice)
 
@@ -74,19 +79,22 @@ nm c = nodeContent "Nm" (c ^. fullName)
 
 -- | Returns one or two nodes of type "PmtInf", one for debits with new mandates and
 -- another for old ones.
-pmtInf_L :: DirectDebitSet -> [Node]                                  -- *
-pmtInf_L dds =
+pmtInf_L :: DirectDebitSet -> BankMap -> [Node]                       -- *
+pmtInf_L dds bkL =
   concat $ (pmtInf' True new, pmtInf' False old) ^.. both
   where
     -- Use of lenses and list comprehensions
     (new, old) = span (^. mandate.isNew) (dds ^.. debits.traverse)
-    pmtInf' areNew ddL = [pmtInf areNew ddL dds | not (null ddL)]
+    pmtInf' areNew ddL = [pmtInf areNew ddL dds bkL| not (null ddL)]
 
-pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> Node             -- +
-pmtInf areNew ddL dds = nodeElem "pmtInf" subnodes
+pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> BankMap ->
+          Node                                                        -- +
+pmtInf areNew ddL dds bkL = nodeElem "pmtInf" subnodes
   where
     subnodes = [ pmtInfId areNew dds, pmtMtd, btchBookg, nbOfTxs_2_4 ddL
-               , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt dds]
+               , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt dds
+               , cdtr (dds ^. creditor), cdtrAcct (dds ^. creditor)
+               , cdtrAgt (dds ^. creditor) bkL ]
 
 pmtInfId :: Bool -> DirectDebitSet -> Node                            -- ++
 pmtInfId areNew dds = nodeContent "MsgId" paymentId
@@ -128,10 +136,29 @@ seqTp :: Bool -> Node                                                 -- +++
 seqTp areNew =
   nodeContent "SeqTp" $ if areNew then ("FRST" :: Text) else "RCUR"
 
--- | Requests a payment in 7 days for all direct debits, even if recurrent mandates.
-reqdColltnDt :: DirectDebitSet -> Node
+-- | Requests a payment in 7 working days for all direct debits, even if recurrent
+-- mandates.
+reqdColltnDt :: DirectDebitSet -> Node                                -- ++
 reqdColltnDt dds =
   nodeContent "ReqdColltnDt" $ T.showGregorian (addWorkingDays 7 (dds ^. creationDay))
+
+cdtr :: Creditor -> Node                                              -- ++
+cdtr c = nodeElem "Cdtr" [nm_2_19 c]
+
+nm_2_19 :: Creditor -> Node                                           -- +++
+nm_2_19 c = nodeContent "Nm" (c ^. fullName)
+
+cdtrAcct :: Creditor -> Node                                          -- ++
+cdtrAcct c = nodeElem "CdtrAcct" [id_2_20 c]
+
+id_2_20 :: Creditor -> Node                                           -- +++
+id_2_20 c = nodeElem "Id" [iban_ c]
+
+iban_ :: Creditor -> Node
+iban_ c = nodeContent "IBAN" (c ^. creditorIban)                      -- ++++
+
+cdtrAgt :: Creditor -> BankMap -> Node                                -- ++
+cdtrAgt c bkL = nodeElem "CdtrAgt" []
 
 
 -- Helper functions for nodes without attributes
@@ -194,17 +221,17 @@ addWorkingDays i d =
 
 -- Rendering and writing of messages
 
-renderMessage :: DirectDebitSet -> LT.Text
-renderMessage dds = renderText settings (message dds)
+renderMessage :: DirectDebitSet -> BankMap -> LT.Text
+renderMessage dds bkL = renderText settings (message dds bkL)
   where
     settings = def { rsPretty = False }
 
 -- | Write direct debits instructions message to XML file, with a decent pretty-printer
 -- (the one coming with Text.XML puts significant whitespace in content nodes).
-writeMessageToFile :: DirectDebitSet -> IO ()
-writeMessageToFile dds = do
+writeMessageToFile :: DirectDebitSet -> BankMap -> IO ()
+writeMessageToFile dds bkL = do
   -- TODO: handle possible error
-  let (Just xmlParsedLight) = LXML.parseXMLDoc (renderMessage dds)
+  let (Just xmlParsedLight) = LXML.parseXMLDoc (renderMessage dds bkL)
   writeFile "Test.xml" (LXML.ppTopElement xmlParsedLight)
 
 
