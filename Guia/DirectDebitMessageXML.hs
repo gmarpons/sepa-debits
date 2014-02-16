@@ -9,6 +9,9 @@
 
 module Guia.DirectDebitMessageXML where
 
+import qualified Prelude
+  (zip)
+
 import           ClassyPrelude    --      hiding (Text)
 import           Control.Lens
 import qualified Data.List                                                      as L
@@ -95,8 +98,9 @@ pmtInf areNew ddL dds bkM = nodeElem "pmtInf" subnodes
     subnodes = [ pmtInfId areNew dds, pmtMtd, btchBookg, nbOfTxs_2_4 ddL
                , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt dds
                , cdtr c, cdtrAcct c, cdtrAgt c bkM, cdtrSchmeId c ]
-               ++ drctDbtTxInf_L c ddL bkM
+               ++ drctDbtTxInf_L c ddL d bkM
     c        = dds ^. creditor
+    d        = dds ^. creationTime
 
 pmtInfId :: Bool -> DirectDebitSet -> Node                            -- ++
 pmtInfId areNew dds = nodeContent "PmtInfId" paymentId
@@ -193,21 +197,31 @@ schmeNm = nodeElem "SchmeNm" [prtry]
 prtry :: Node                                                         -- +++++++
 prtry = nodeContent "Prtry" ("SEPA" :: Text)
 
-drctDbtTxInf_L :: Creditor -> [DirectDebit] -> BankMap -> [Node]      -- *
-drctDbtTxInf_L c ddL bkM = map (\dd -> drctDbtTxInf dd c bkM) ddL
+drctDbtTxInf_L :: Creditor -> [DirectDebit] -> T.ZonedTime -> BankMap ->
+                  [Node]                                              -- *
+drctDbtTxInf_L c ddL d bkM = map (\idd -> drctDbtTxInf idd c d bkM) indexedDdL
+  where
+    indexedDdL = Prelude.zip [1..] ddL
 
-drctDbtTxInf :: DirectDebit -> Creditor -> BankMap -> Node            -- ++
-drctDbtTxInf dd c bkM = nodeElem "DrctDbtTxInf" [pmtId dd c]
+drctDbtTxInf :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> BankMap ->
+                Node                                                  -- ++
+drctDbtTxInf idd c d bkM = nodeElem "DrctDbtTxInf" [pmtId idd c d]
 
-pmtId :: DirectDebit -> Creditor -> Node                              -- +++
-pmtId dd c = nodeElem "PmtId" [{-endToEndId dd c-}]
+pmtId :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> Node        -- +++
+pmtId idd c d = nodeElem "PmtId" [endToEndId idd c d]
 
--- endToEndId :: DirectDebit -> Creditor -> Node                         -- ++++
--- endToEndId dd c = nodeContent "EndToEndId" endToEndId'
---   where
---    endToEndId' = 
-
-
+endToEndId :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> Node   -- ++++
+endToEndId (i, _) c d = nodeContent "EndToEndId" endToEndId'
+  where
+    -- FIXME: refactor with messageId
+    endToEndId' :: Text
+    endToEndId' = yyyymmdd ++ hhmmss ++ messageCount_ ++ debitCount
+    yyyymmdd          = pack $ filter (/= '-') $ T.showGregorian (T.localDay localTime)
+    (hhmmss', _)      = break (== '.') $ show (T.localTimeOfDay localTime)
+    hhmmss            = pack $ filter (/= ':') hhmmss'
+    localTime         = T.zonedTimeToLocalTime d
+    messageCount_     = pack $ PF.printf "%013d" (c ^. messageCount)
+    debitCount        = pack $ PF.printf "%08d" i
 
 
 -- Helper functions for nodes without attributes
@@ -235,7 +249,7 @@ instance Content Int
 -- Other helper functions
 
 messageId :: DirectDebitSet -> Text
-messageId dds = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ counter
+messageId dds = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ count
   where
     creation_         = dds ^. creationTime
     creditor_         = dds ^. creditor
@@ -244,7 +258,7 @@ messageId dds = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ counter
     hhmmss            = pack $ filter (/= ':') hhmmss'
     milis             = pack $ take 5 $ dropWhile (== '.') (milis' ++ repeat '0')
                         -- TODO: messageCount is updated elsewhere
-    counter           = pack $ PF.printf "%013d" (creditor_ ^. messageCount)
+    count             = pack $ PF.printf "%013d" (creditor_ ^. messageCount)
 
     -- A LocalTime contains only a Day and a TimeOfDay, so messageId generation doesn't
     -- depend on the local time zone.
