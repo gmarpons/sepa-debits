@@ -12,7 +12,7 @@ module Guia.DirectDebitMessageXML where
 import qualified Prelude
   (zip)
 
-import           ClassyPrelude    --      hiding (Text)
+import           ClassyPrelude
 import           Control.Lens
 import qualified Data.List                                                      as L
   (genericDrop)
@@ -77,10 +77,10 @@ ctrlSum_1_7 =
   nodeContent "CtrlSum" . priceToText . sumOf (traverse.items.traverse.finalPrice)
 
 initgPty :: DirectDebitSet -> Node                                    -- ++
-initgPty dds = nodeElem "InitgPty" [nm (dds ^. creditor)]
+initgPty dds = nodeElem "InitgPty" [nm (dds ^. creditor.fullName)]
 
-nm :: Creditor -> Node                                                -- +++
-nm c = nodeContent "Nm" (c ^. fullName)
+nm :: Text -> Node                                                    -- +++
+nm = nodeContent "Nm"
 
 -- | Returns one or two nodes of type "PmtInf", one for debits with new mandates and
 -- another for old ones.
@@ -128,16 +128,13 @@ pmtTpInf areNew = nodeElem "PmtTpInf" subnodes
     subnodes = [svcLvl, lclInstrm, seqTp areNew]
 
 svcLvl :: Node                                                        -- +++
-svcLvl = nodeElem "SvcLvl" [cd_2_9]
+svcLvl = nodeElem "SvcLvl" [cd "SEPA"]
 
-cd_2_9 :: Node                                                        -- ++++
-cd_2_9 = nodeContent "Cd" ("SEPA" :: Text)
+cd :: Text -> Node                                                        -- ++++
+cd = nodeContent "Cd"
 
 lclInstrm :: Node                                                     -- +++
-lclInstrm = nodeElem "LclInstrm" [cd_2_12]
-
-cd_2_12 :: Node                                                       -- ++++
-cd_2_12 = nodeContent "Cd" ("CORE" :: Text)
+lclInstrm = nodeElem "LclInstrm" [cd "CORE"]
 
 seqTp :: Bool -> Node                                                 -- +++
 seqTp areNew =
@@ -156,26 +153,28 @@ nm_2_19 :: Creditor -> Node                                           -- +++
 nm_2_19 c = nodeContent "Nm" (c ^. fullName)
 
 cdtrAcct :: Creditor -> Node                                          -- ++
-cdtrAcct c = nodeElem "CdtrAcct" [id_2_20 c]
+cdtrAcct c = nodeElem "CdtrAcct" [id_iban (c ^. creditorIban)]
 
-id_2_20 :: Creditor -> Node                                           -- +++
-id_2_20 c = nodeElem "Id" [iban_ c]
+-- This "id" label is easy to refactor, but not the others, as have different sub-element
+-- structure.
+id_iban :: IBAN -> Node                                               -- +++
+id_iban i = nodeElem "Id" [iban_ i]
 
-iban_ :: Creditor -> Node
-iban_ c = nodeContent "IBAN" (c ^. creditorIban)                      -- ++++
+iban_ :: IBAN -> Node
+iban_ = nodeContent "IBAN"
 
 cdtrAgt :: Creditor -> BankMap -> Node                                -- ++
-cdtrAgt c bkM = nodeElem "CdtrAgt" [finInstnId c bkM]
+cdtrAgt c bkM = nodeElem "CdtrAgt" [finInstnId (c ^. creditorIban) bkM]
 
-finInstnId :: Creditor -> BankMap -> Node                             -- +++
-finInstnId c bkM = nodeElem "FinInstnId" [bic_2_21 c bkM]
+finInstnId :: IBAN -> BankMap -> Node                                 -- +++
+finInstnId i bkM = nodeElem "FinInstnId" [bic_ i bkM]
 
-bic_2_21 :: Creditor -> BankMap -> Node                               -- ++++
-bic_2_21 c bkM = nodeContent "BIC" bicOfc
+bic_ :: IBAN -> BankMap -> Node                                       -- ++++
+bic_ i bkM = nodeContent "BIC" bicOfc
   where
-    bicOfc = case lookup (c ^. creditorIban ^. bankDigits) bkM of
+    bicOfc = case lookup (i ^. bankDigits) bkM of
       Just bk   -> take 8 (bk ^. bic) -- Office code is optional
-      Nothing   -> error "bic_2_21: can't lookup SpanishBank"
+      Nothing   -> error "bic_: can't lookup SpanishBank"
 
 cdtrSchmeId :: Creditor -> Node                                       -- ++
 cdtrSchmeId c = nodeElem "CdtrSchmeId" [id_2_27 c]
@@ -208,7 +207,8 @@ drctDbtTxInf :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> BankMap ->
                 Node                                                  -- ++
 drctDbtTxInf (i, dd) c d bkM = nodeElem "DrctDbtTxInf" subnodes
   where
-    subnodes = [pmtId i c d, instdAmt dd, drctDbtTx (dd ^. mandate)]
+    subnodes = [ pmtId i c d, instdAmt dd, drctDbtTx (dd ^. mandate)
+               , dbtrAgt (dd ^. mandate) bkM, dbtr dd, dbtrAcct dd ]
 
 pmtId :: Int -> Creditor -> T.ZonedTime -> Node                       -- +++
 pmtId i c d = nodeElem "PmtId" [endToEndId i c d]
@@ -242,6 +242,20 @@ mndtId m = nodeContent "MndtId" (m ^. mandateRef)
 
 dtOfSgntr :: Mandate -> Node                                          -- +++++
 dtOfSgntr m = nodeContent "DtOfSgntr" $ T.showGregorian (m ^. signatureDate)
+
+-- Back link to finInstnId
+dbtrAgt :: Mandate -> BankMap -> Node                                 -- +++
+dbtrAgt m bkM = nodeElem "DbtrAgt" [finInstnId (m ^. iban) bkM]
+
+-- Back link to nm
+dbtr :: DirectDebit -> Node                                           -- +++
+dbtr dd = nodeElem "Dbtr" [nm name]
+  where
+    name = (dd ^. debtorLastName) ++ ", " ++ (dd ^. debtorFirstName)
+
+-- Back link to id_iban
+dbtrAcct :: DirectDebit -> Node                                       -- +++
+dbtrAcct dd = nodeElem "DbtrAcct" [id_iban (dd ^. mandate.iban)]
 
 
 -- Helper functions for nodes without attributes

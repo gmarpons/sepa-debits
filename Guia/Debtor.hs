@@ -92,7 +92,7 @@ validDebtorName firstName_ lastName_ =
   && length lastName_  + length firstName_      <= maxLengthFullName
   where maxLengthFirstName = 40
         maxLengthLastName  = 60
-        maxLengthFullName  = 70 -- SEPA constraint (2.72)
+        maxLengthFullName  = 68 -- SEPA constraint (2.72) is 70, keep room for ", "
 
 
 -- | We want mandates ordered from more recent to oldest.

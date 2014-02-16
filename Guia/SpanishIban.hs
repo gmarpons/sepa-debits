@@ -9,6 +9,7 @@
 
 module Guia.SpanishIban
        ( -- Spanish iban
+         IBAN,
          bankDigits,
          officeDigits,
          validSpanishIban,
@@ -28,6 +29,8 @@ import qualified Text.Printf                                                    
   (printf)
 
 
+type IBAN = Text
+
 -- | Getter for the four digits code for banks.
 bankDigits :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
 bankDigits = L.to _bankDigits
@@ -46,7 +49,7 @@ _officeDigits iban = assert (validSpanishIban iban) officeDigits_
   where (_ibanPrefix, office_dc_num)   = splitAt 8 iban
         (officeDigits_, _)              = splitAt 4 office_dc_num
 
-validSpanishIban :: Text -> Bool
+validSpanishIban :: IBAN -> Bool
 validSpanishIban iban_ =
   -- That the last 22 chars are digits is already guaranteed by asserts in
   -- spanishIbanPrefixFromCcc and cccControlDigits
