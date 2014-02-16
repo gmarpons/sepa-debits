@@ -94,8 +94,9 @@ pmtInf areNew ddL dds bkM = nodeElem "pmtInf" subnodes
   where
     subnodes = [ pmtInfId areNew dds, pmtMtd, btchBookg, nbOfTxs_2_4 ddL
                , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt dds
-               , cdtr (dds ^. creditor), cdtrAcct (dds ^. creditor)
-               , cdtrAgt (dds ^. creditor) bkM ]
+               , cdtr c, cdtrAcct c, cdtrAgt c bkM, cdtrSchmeId c ]
+               ++ drctDbtTxInf_L c ddL bkM
+    c        = dds ^. creditor
 
 pmtInfId :: Bool -> DirectDebitSet -> Node                            -- ++
 pmtInfId areNew dds = nodeContent "MsgId" paymentId
@@ -170,6 +171,43 @@ bic_2_21 c bkM = nodeContent "BIC" bicOfc
     bicOfc = case lookup (c ^. creditorIban ^. bankDigits) bkM of
       Just bk   -> take 8 (bk ^. bic) -- Office code is optional
       Nothing   -> error "bic_2_21: can't lookup SpanishBank"
+
+cdtrSchmeId :: Creditor -> Node                                       -- ++
+cdtrSchmeId c = nodeElem "CdtrSchmeId" [id_2_27 c]
+
+id_2_27 :: Creditor -> Node                                           -- +++
+id_2_27 c = nodeElem "Id" [prvtId c]
+
+prvtId :: Creditor -> Node                                            -- ++++
+prvtId c = nodeElem "PrvtId" [other c]
+
+other :: Creditor -> Node                                             -- +++++
+other c = nodeElem "Other" [id_2_27_b c, prtry]
+
+id_2_27_b :: Creditor -> Node                                         -- ++++++
+id_2_27_b c = nodeContent "Id" (c ^. sepaId)
+
+schmeNm :: Node                                                       -- ++++++
+schmeNm = nodeElem "SchmeNm" [prtry]
+
+prtry :: Node                                                         -- +++++++
+prtry = nodeContent "Prtry" ("SEPA" :: Text)
+
+drctDbtTxInf_L :: Creditor -> [DirectDebit] -> BankMap -> [Node]      -- *
+drctDbtTxInf_L c ddL bkM = map (\dd -> drctDbtTxInf dd c bkM) ddL
+
+drctDbtTxInf :: DirectDebit -> Creditor -> BankMap -> Node            -- ++
+drctDbtTxInf dd c bkM = nodeElem "DrctDbtTxInf" [pmtId dd c]
+
+pmtId :: DirectDebit -> Creditor -> Node                              -- +++
+pmtId dd c = nodeElem "PmtId" [{-endToEndId dd c-}]
+
+-- endToEndId :: DirectDebit -> Creditor -> Node                         -- ++++
+-- endToEndId dd c = nodeContent "EndToEndId" endToEndId'
+--   where
+--    endToEndId' = 
+
+
 
 
 -- Helper functions for nodes without attributes
