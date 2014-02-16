@@ -12,13 +12,15 @@ module Guia.DirectDebitMessageXML where
 import qualified Prelude
   (zip)
 
-import           ClassyPrelude        --  hiding (writeFile)
+import           ClassyPrelude
+import qualified Codec.Text.IConv                                               as IC
 import           Control.Lens
 import qualified Data.List                                                      as L
-  (genericDrop, nub, transpose)
+  (genericDrop)
 import qualified Data.Map                                                       as M
 import qualified Data.Text.Lazy                                                 as LT
   (Text)
+import qualified Data.Text.Lazy.Encoding                                        as LT
 import qualified Data.Time.Calendar                                             as T
 import qualified Data.Time.Calendar.Easter                                      as T
 import           Guia.BillingConcept
@@ -383,8 +385,12 @@ writeMessageToFile dds bkM = do
   let xmlLines = lines $ renderText (def { rsPretty = True }) (message dds bkM)
       xmlTagAndComment = take 2 xmlLines
       xmlElementL = drop 1 $ LXML.parseXML $ renderText def (message dds bkM)
-      xmlPP = pack (concatMap LXML.ppContent xmlElementL)
-  writeFile "Test.xml" $ unlines xmlTagAndComment ++ xmlPP ++ "\n"
+      xmlPP  = pack (concatMap LXML.ppContent xmlElementL)
+      xmlPP' = unlines xmlTagAndComment ++ xmlPP ++ "\n"
+      xmlBS  = LT.encodeUtf8 xmlPP'
+  -- TODO: look at text-icu library normalization mode for transliteration and drop
+  -- dependency on iconv.
+  writeFile "Test.xml" $ IC.convertFuzzy IC.Transliterate "UTF-8" "ASCII" xmlBS
 
 
 -- Test data
