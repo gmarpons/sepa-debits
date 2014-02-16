@@ -71,6 +71,7 @@ creDtTm dds = nodeContent "CreDtTm" (isoDate ++ "T" ++ isoTime)
 nbOfTxs_1_6 :: DirectDebitSet -> Node                                 -- ++
 nbOfTxs_1_6 dds = nodeContent "NbOfTxs" (length (dds ^. debits))
 
+-- FIXME: sum things only once
 ctrlSum_1_7 :: [DirectDebit] -> Node                                  -- ++
 ctrlSum_1_7 =
   nodeContent "CtrlSum" . priceToText . sumOf (traverse.items.traverse.finalPrice)
@@ -205,13 +206,15 @@ drctDbtTxInf_L c ddL d bkM = map (\idd -> drctDbtTxInf idd c d bkM) indexedDdL
 
 drctDbtTxInf :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> BankMap ->
                 Node                                                  -- ++
-drctDbtTxInf idd c d bkM = nodeElem "DrctDbtTxInf" [pmtId idd c d]
+drctDbtTxInf (i, dd) c d bkM = nodeElem "DrctDbtTxInf" subnodes
+  where
+    subnodes = [pmtId i c d, instdAmt dd]
 
-pmtId :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> Node        -- +++
-pmtId idd c d = nodeElem "PmtId" [endToEndId idd c d]
+pmtId :: Int -> Creditor -> T.ZonedTime -> Node                       -- +++
+pmtId i c d = nodeElem "PmtId" [endToEndId i c d]
 
-endToEndId :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> Node   -- ++++
-endToEndId (i, _) c d = nodeContent "EndToEndId" endToEndId'
+endToEndId :: Int -> Creditor -> T.ZonedTime -> Node                  -- ++++
+endToEndId i c d = nodeContent "EndToEndId" endToEndId'
   where
     -- FIXME: refactor with messageId
     endToEndId' :: Text
@@ -222,6 +225,11 @@ endToEndId (i, _) c d = nodeContent "EndToEndId" endToEndId'
     localTime         = T.zonedTimeToLocalTime d
     messageCount_     = pack $ PF.printf "%013d" (c ^. messageCount)
     debitCount        = pack $ PF.printf "%08d" i
+
+instdAmt :: DirectDebit -> Node                                       -- +++
+instdAmt dd = NodeElement $ Element "InstdAmt" (M.singleton "Ccy" "EUR") [content]
+  where
+    content = NodeContent $ priceToText (sumOf (items.traverse.finalPrice) dd)
 
 
 -- Helper functions for nodes without attributes
