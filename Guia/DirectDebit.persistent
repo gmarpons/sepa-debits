@@ -16,7 +16,7 @@ DirectDebitSet                sql=direct_debit_set
 DirectDebit                   sql=direct_debits
   debtorFirstName             Text
   debtorLastName              Text
-  mandate                     Mandate
+  mandate                     Mandate             -- A copy
   items                       [BillingConcept]    -- May contain changed price
   unstructured                Text                -- This may seem redundant, but permits
                                                   -- regenerate the XML file in case whe

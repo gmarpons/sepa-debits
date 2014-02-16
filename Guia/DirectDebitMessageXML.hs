@@ -208,7 +208,7 @@ drctDbtTxInf :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> BankMap ->
                 Node                                                  -- ++
 drctDbtTxInf (i, dd) c d bkM = nodeElem "DrctDbtTxInf" subnodes
   where
-    subnodes = [pmtId i c d, instdAmt dd]
+    subnodes = [pmtId i c d, instdAmt dd, drctDbtTx (dd ^. mandate)]
 
 pmtId :: Int -> Creditor -> T.ZonedTime -> Node                       -- +++
 pmtId i c d = nodeElem "PmtId" [endToEndId i c d]
@@ -230,6 +230,18 @@ instdAmt :: DirectDebit -> Node                                       -- +++
 instdAmt dd = NodeElement $ Element "InstdAmt" (M.singleton "Ccy" "EUR") [content]
   where
     content = NodeContent $ priceToText (sumOf (items.traverse.finalPrice) dd)
+
+drctDbtTx :: Mandate -> Node                                          -- +++
+drctDbtTx m = nodeElem "DrctDbtTx" [mndtRltdInf m]
+
+mndtRltdInf :: Mandate -> Node                                        -- ++++
+mndtRltdInf m = nodeElem "MndtRltdInf" [mndtId m, dtOfSgntr m]
+
+mndtId :: Mandate -> Node                                             -- +++++
+mndtId m = nodeContent "MndtId" (m ^. mandateRef)
+
+dtOfSgntr :: Mandate -> Node                                          -- +++++
+dtOfSgntr m = nodeContent "DtOfSgntr" $ T.showGregorian (m ^. signatureDate)
 
 
 -- Helper functions for nodes without attributes
