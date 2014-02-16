@@ -23,8 +23,8 @@ import           Guia.Creditor
 import           Guia.Debtor
 import           Guia.DirectDebit
 import           Guia.SpanishIban
--- import qualified Text.Printf                                                    as PF
---  (printf)
+import qualified Text.Printf                                                    as PF
+ (printf)
 import           Text.XML               hiding (writeFile)
 import qualified Text.XML.Light.Input                                           as LXML
 import qualified Text.XML.Light.Output                                          as LXML
@@ -57,7 +57,7 @@ grpHdr dds = nodeElem "GrpHdr" subnodes
                , ctrlSum_1_7 (dds ^. debits), initgPty dds]
 
 msgId :: DirectDebitSet -> Node                                       -- ++
-msgId dds = nodeContent "MsgId" (dds ^. messageId)
+msgId dds = nodeContent "MsgId" (messageId dds)
 
 creDtTm :: DirectDebitSet -> Node                                     -- ++
 creDtTm dds = nodeContent "CreDtTm" (isoDate ++ "T" ++ isoTime)
@@ -99,9 +99,9 @@ pmtInf areNew ddL dds bkM = nodeElem "pmtInf" subnodes
     c        = dds ^. creditor
 
 pmtInfId :: Bool -> DirectDebitSet -> Node                            -- ++
-pmtInfId areNew dds = nodeContent "MsgId" paymentId
+pmtInfId areNew dds = nodeContent "PmtInfId" paymentId
   where
-    paymentId = prefix ++ drop 3 (dds ^. messageId)
+    paymentId = prefix ++ drop 3 (messageId dds)
     prefix    = if areNew then "FST" else "REC"
 
 pmtMtd :: Node                                                        -- ++
@@ -230,6 +230,25 @@ instance Content String where
   toContent = pack
 
 instance Content Int
+
+
+-- Other helper functions
+
+messageId :: DirectDebitSet -> Text
+messageId dds = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ counter
+  where
+    creation_         = dds ^. creationTime
+    creditor_         = dds ^. creditor
+    yyyymmdd          = pack $ filter (/= '-') $ T.showGregorian (T.localDay localTime)
+    (hhmmss', milis') = break (== '.') $ show (T.localTimeOfDay localTime)
+    hhmmss            = pack $ filter (/= ':') hhmmss'
+    milis             = pack $ take 5 $ dropWhile (== '.') (milis' ++ repeat '0')
+                        -- TODO: messageCount is updated elsewhere
+    counter           = pack $ PF.printf "%013d" (creditor_ ^. messageCount)
+
+    -- A LocalTime contains only a Day and a TimeOfDay, so messageId generation doesn't
+    -- depend on the local time zone.
+    localTime =       T.zonedTimeToLocalTime creation_
 
 
 -- Non-working days for banking (in Spain): all saturdays, all sundays, New Year's Day,

@@ -15,7 +15,6 @@ module Guia.DirectDebit
          mkDirectDebitSet,
          DirectDebitSet, DirectDebitSetId,
          description,
-         messageId,
          creationTime,
          creditor,
          debits,
@@ -24,7 +23,6 @@ module Guia.DirectDebit
          validDirectDebitSet,
          storableDirectDebitSet,
          storableDebits,
-         mkMessageId,
 
          -- Direct debit instruction
          mkDirectDebit,
@@ -51,8 +49,7 @@ import           Guia.BillingConcept
 import           Guia.Creditor
 import           Guia.Debtor
 import           Guia.MongoSettings
-import qualified Text.Printf                                                    as PF
-  (printf)
+
 
 -- WARNING: the use of lenses (setters) can violate the invariants of the Abstract Data
 -- Types in this module.
@@ -66,33 +63,16 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 mkDirectDebitSet :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> DirectDebitSet
 mkDirectDebitSet descr creation_ creditor_ debits_ =
   assert (validDirectDebitSet descr creation_ creditor_ debits_)
-  $ DirectDebitSet descr messageId_ creation_ creditor_ debits_
-  where messageId_ = mkMessageId creation_ creditor_
-
--- | Creates a SEPA message Id following Spanish Q19.14 instructions. Its construction
--- guarantees the SEPA constraint of exactly 35 alphanumeric characters.
-mkMessageId :: T.ZonedTime -> Creditor -> Text
-mkMessageId creation_ creditor_ = "PRE" ++ yyyymmdd ++ hhmmss ++ milis ++ counter
-  where
-    yyyymmdd          = pack $ filter (/= '-') $ T.showGregorian (T.localDay localTime)
-    (hhmmss', milis') = break (== '.') $ show (T.localTimeOfDay localTime)
-    hhmmss            = pack $ filter (/= ':') hhmmss'
-    milis             = pack $ take 5 $ dropWhile (== '.') (milis' ++ repeat '0')
-                        -- TODO: messageCount is updated elsewhere
-    counter           = pack $ PF.printf "%013d" (creditor_ ^. messageCount)
-
-    -- A LocalTime contains only a Day and a TimeOfDay, so messageId generation doesn't
-    -- depend on the local time zone.
-    localTime =       T.zonedTimeToLocalTime creation_
+  $ DirectDebitSet descr creation_ creditor_ debits_
 
 -- Cannot check meaningful creation date outside IO
 validDirectDebitSet :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> Bool
-validDirectDebitSet  descr creation_ creditor_ debits_ =
+validDirectDebitSet  descr _creation_ _creditor_ debits_ =
      not (null descr) && length descr <= maxLengthDescr
-  && length (mkMessageId creation_ creditor_) == lengthMessageId
+  -- && length (mkMessageId creation_ creditor_) == lengthMessageId
   && validDebits debits_
   where maxLengthDescr  = 40
-        lengthMessageId = 35    -- SEPA constraint
+        -- lengthMessageId = 35    -- SEPA constraint
 
 validDebits :: [DirectDebit] -> Bool
 validDebits _debits_ = True

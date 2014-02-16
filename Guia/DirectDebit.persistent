@@ -1,9 +1,11 @@
 DirectDebitSet                sql=direct_debit_set
   description                 Text                -- Determines file name
-  messageId                   Text                -- Immutable
   creationTime                T.ZonedTime         -- Includes Day and TimeOfDay,
-                                                  -- applied to current TimeZone
-  creditor                    Creditor            -- Get a copy on construction
+                                                  -- applied to current TimeZone.
+                                                  -- Must be updated  every time the
+                                                  -- DirectDebitSet is edited.
+  creditor                    Creditor            -- Get a copy on construction, includes
+                                                  -- the messageCount to be used in XML gen.
   debits                      [DirectDebit]
   
   -- Unique constraints
