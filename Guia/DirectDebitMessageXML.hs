@@ -7,7 +7,14 @@
   TypeFamilies
   #-}
 
-module Guia.DirectDebitMessageXML where
+module Guia.DirectDebitMessageXML
+       ( writeMessageToFile,
+         renderMessage,
+
+         -- To test only
+         dds_,
+         insertDDS
+       ) where
 
 import qualified Prelude
   (zip)
@@ -108,7 +115,7 @@ pmtInf_L dds bkM =
 
 pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> BankMap ->
           Node                                                        -- +
-pmtInf areNew ddL dds bkM = nodeElem "pmtInf" subnodes
+pmtInf areNew ddL dds bkM = nodeElem "PmtInf" subnodes
   where
     subnodes = [ pmtInfId areNew dds, pmtMtd, btchBookg, nbOfTxs_2_4 ddL
                , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt areNew dds
@@ -197,10 +204,10 @@ id_2_27 :: Creditor -> Node                                           -- +++
 id_2_27 c = nodeElem "Id" [prvtId c]
 
 prvtId :: Creditor -> Node                                            -- ++++
-prvtId c = nodeElem "PrvtId" [other c]
+prvtId c = nodeElem "PrvtId" [othr c]
 
-other :: Creditor -> Node                                             -- +++++
-other c = nodeElem "Other" [id_2_27_b c, prtry]
+othr :: Creditor -> Node                                              -- +++++
+othr c = nodeElem "Othr" [id_2_27_b c, schmeNm]
 
 id_2_27_b :: Creditor -> Node                                         -- ++++++
 id_2_27_b c = nodeContent "Id" (c ^. sepaId)
