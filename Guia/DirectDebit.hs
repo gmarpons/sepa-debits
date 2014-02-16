@@ -31,7 +31,6 @@ module Guia.DirectDebit
          debtorLastName,
          mandate,
          items,
-         unstructured,
          validDirectDebit,
          storableDirectDebit
        ) where
@@ -120,21 +119,16 @@ _creationTimeOfDay col = T.localTimeOfDay (T.zonedTimeToLocalTime (col ^. creati
 
 -- Direct debit instructions
 
-mkDirectDebit :: Text -> Text -> Mandate -> [BillingConcept] -> Text -> DirectDebit
-mkDirectDebit first_ last_ mandate_ items_ unstructured_ =
-  assert (validDirectDebit first_ last_ mandate_ items_ unstructured_)
-  $ DirectDebit first_ last_ mandate_ items_ unstructured_
+mkDirectDebit :: Text -> Text -> Mandate -> [BillingConcept] -> DirectDebit
+mkDirectDebit first_ last_ mandate_ items_ =
+  assert (validDirectDebit first_ last_ mandate_ items_)
+  $ DirectDebit first_ last_ mandate_ items_
 
-validDirectDebit :: Text -> Text -> Mandate -> [BillingConcept] -> Text -> Bool
-validDirectDebit firstName_ lastName_ _mandate_ _items_ unstructured_ =
+validDirectDebit :: Text -> Text -> Mandate -> [BillingConcept] -> Bool
+validDirectDebit firstName_ lastName_ _mandate_ _items_ =
      validDebtorName firstName_ lastName_
-  && length unstructured_ <= maxLengthUnstructured
-  where maxLengthUnstructured = 140 -- SEPA constraint (2.89), WARNING: min length is 1,
-                                    -- but checked in storableDirectDebit
 
 -- | Check things that are not part of the invariant of the data type, but are necessary
 -- both to store in the database and to generate message file.
-storableDirectDebit :: Text -> Text -> Mandate -> [BillingConcept] -> Text -> Bool
-storableDirectDebit firstName_ lastName_ _mandate_ _items_ unstructured_ =
-     validDirectDebit firstName_ lastName_ _mandate_ _items_ unstructured_
-  && not (null unstructured_)   -- SEPA constraint
+storableDirectDebit :: Text -> Text -> Mandate -> [BillingConcept] -> Bool
+storableDirectDebit = validDirectDebit

@@ -18,7 +18,4 @@ DirectDebit                   sql=direct_debits
   debtorLastName              Text
   mandate                     Mandate             -- A copy
   items                       [BillingConcept]    -- May contain changed price
-  unstructured                Text                -- This may seem redundant, but permits
-                                                  -- regenerate the XML file in case whe
-                                                  -- change the algorithm.
   deriving Eq Read Show

@@ -18,6 +18,8 @@ module Guia.Creditor
          fullName,
          creditorIban,
          messageCount,
+         mandateCount,
+         activity,
          validCreditor
        ) where
 
@@ -39,16 +41,17 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 
 -- Creditors
 
-mkCreditor :: Text -> Text -> Text -> Int -> Creditor
-mkCreditor id_ name iban count =
-  assert (validCreditor id_ name iban count)
-  $ Creditor id_ name iban count
+mkCreditor :: Text -> Text -> IBAN -> Int -> Int -> Text -> Creditor
+mkCreditor id_ name iban messageCount_ mandateCount_ activity_ =
+  assert (validCreditor id_ name iban messageCount_ mandateCount_ activity_)
+  $ Creditor id_ name iban messageCount_ mandateCount_ activity_
 
-validCreditor :: Text -> Text -> Text -> Int -> Bool
-validCreditor id_ name iban count =
+validCreditor :: Text -> Text -> IBAN -> Int -> Int -> Text -> Bool
+validCreditor id_ name iban messageCount_ mandateCount_ _activity =
      length id_ == 16
   && not (null name) && length name <= maxLengthFullName -- SEPA constraints
   && validSpanishIban iban
-  && count >= 0
+  && messageCount_ >= 0
+  && mandateCount_ >= 0
   where
     maxLengthFullName = 70      -- SEPA constraint

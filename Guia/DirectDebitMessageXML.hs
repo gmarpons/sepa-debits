@@ -15,7 +15,7 @@ import qualified Prelude
 import           ClassyPrelude
 import           Control.Lens
 import qualified Data.List                                                      as L
-  (genericDrop)
+  (genericDrop, nub, transpose)
 import qualified Data.Map                                                       as M
 import qualified Data.Text.Lazy                                                 as LT
   (Text)
@@ -97,7 +97,7 @@ pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> BankMap ->
 pmtInf areNew ddL dds bkM = nodeElem "pmtInf" subnodes
   where
     subnodes = [ pmtInfId areNew dds, pmtMtd, btchBookg, nbOfTxs_2_4 ddL
-               , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt dds
+               , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt areNew dds
                , cdtr c, cdtrAcct c, cdtrAgt c bkM, cdtrSchmeId c ]
                ++ drctDbtTxInf_L c ddL d bkM
     c        = dds ^. creditor
@@ -140,11 +140,11 @@ seqTp :: Bool -> Node                                                 -- +++
 seqTp areNew =
   nodeContent "SeqTp" $ if areNew then ("FRST" :: Text) else "RCUR"
 
--- | Requests a payment in 7 working days for all direct debits, even if recurrent
--- mandates.
-reqdColltnDt :: DirectDebitSet -> Node                                -- ++
-reqdColltnDt dds =
-  nodeContent "ReqdColltnDt" $ T.showGregorian (addWorkingDays 7 (dds ^. creationDay))
+reqdColltnDt :: Bool -> DirectDebitSet -> Node                        -- ++
+reqdColltnDt areNew dds = nodeContent "ReqdColltnDt" reqDay
+  where
+    reqDay = T.showGregorian (addWorkingDays n (dds ^. creationDay))
+    n      = if areNew then 7 else 4
 
 cdtr :: Creditor -> Node                                              -- ++
 cdtr c = nodeElem "Cdtr" [nm_2_19 c]
@@ -208,7 +208,8 @@ drctDbtTxInf :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> BankMap ->
 drctDbtTxInf (i, dd) c d bkM = nodeElem "DrctDbtTxInf" subnodes
   where
     subnodes = [ pmtId i c d, instdAmt dd, drctDbtTx (dd ^. mandate)
-               , dbtrAgt (dd ^. mandate) bkM, dbtr dd, dbtrAcct dd ]
+               , dbtrAgt (dd ^. mandate) bkM, dbtr dd, dbtrAcct dd
+               , rmtInf dd c ]
 
 pmtId :: Int -> Creditor -> T.ZonedTime -> Node                       -- +++
 pmtId i c d = nodeElem "PmtId" [endToEndId i c d]
@@ -256,6 +257,24 @@ dbtr dd = nodeElem "Dbtr" [nm name]
 -- Back link to id_iban
 dbtrAcct :: DirectDebit -> Node                                       -- +++
 dbtrAcct dd = nodeElem "DbtrAcct" [id_iban (dd ^. mandate.iban)]
+
+rmtInf :: DirectDebit -> Creditor -> Node                             -- +++
+rmtInf dd c = nodeElem "RmtInf" [ustrd dd c]
+
+-- SEPA constraint (2.89): 1 <= length <= 140
+ustrd :: DirectDebit -> Creditor -> Node                              -- ++++
+ustrd dd c = nodeContent "Ustrd" itemsInfo
+  where
+    itemsInfo            = (c ^. activity) ++ ": " ++ itemsInfo' ++ closing
+    closing              = if null more then "" else ", etc."
+    (itemsInfo', more)   = splitAt 130 $ intercalate ", " groupedNames
+    groupedNames         = map addCount $ groupBy shortNames sortedNames
+    sortedNames          = sortBy (comparing (^. shortName)) (dd ^.. items.traverse)
+    shortNames bc1 bc2   = (bc1 ^. shortName) == (bc2 ^. shortName)
+    addCount []          = ""     -- Should not happen
+    addCount (bc : bcs)  = let name = bc ^. shortName in
+                           if null bcs then name
+                           else name ++ " (x" ++ (pack . show) (length bcs + 1) ++ ")"
 
 
 -- Helper functions for nodes without attributes
@@ -372,8 +391,8 @@ insertDDS = DB.runDb $ do
       (m1 : _) = d1 ^.. mandates.traversed
       (m2 : _) = d2 ^.. mandates.traversed
       (bc1 : bc2 : _) = map DB.entityVal bcEL
-      dd1 = mkDirectDebit (d1 ^. firstName) (d1 ^. lastName) m1 [bc1, bc2] ""
-      dd2 = mkDirectDebit (d2 ^. firstName) (d2 ^. lastName) m2 [bc1] ""
+      dd1 = mkDirectDebit (d1 ^. firstName) (d1 ^. lastName) m1 [bc1, bc2, bc1]
+      dd2 = mkDirectDebit (d2 ^. firstName) (d2 ^. lastName) m2 [bc1]
       dds = mkDirectDebitSet "New DdSet" now c [dd1, dd2]
   liftIO $ putStrLn "Insert"
   DB.deleteWhere ([] :: [DB.Filter DirectDebitSet])

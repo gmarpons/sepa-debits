@@ -3,4 +3,7 @@ BillingConcept                sql=billing_concepts
   longName                    Text Maybe
   basePrice                   Int                 -- Base price * 100
   vatRatio                    Int                 -- VAT ratio * 100
+
+  -- Unique constraints
+  UniqueShortName             shortName
   deriving Eq Read Show

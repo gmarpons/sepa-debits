@@ -7,4 +7,6 @@ Creditor                      sql=creditors
                                                   -- Stores the next number to use.
                                                   -- Incremented every time we create a
                                                   -- DirectDebitSet, even if not sent.
+  mandateCount                Int                 -- Used to construct mandateRef.
+  activity                    Text                -- Used in XML "Ustrd" label
   deriving Eq Read Show
