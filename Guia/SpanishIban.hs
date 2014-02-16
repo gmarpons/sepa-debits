@@ -9,8 +9,8 @@
 
 module Guia.SpanishIban
        ( -- Spanish iban
-         bank,
-         office,
+         bankDigits,
+         officeDigits,
          validSpanishIban,
          spanishIbanPrefixFromCcc,
          cccControlDigits
@@ -29,22 +29,22 @@ import qualified Text.Printf                                                    
 
 
 -- | Getter for the four digits code for banks.
-bank :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
-bank = L.to _bank
+bankDigits :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
+bankDigits = L.to _bankDigits
 
-_bank :: Text -> Text
-_bank iban = assert (validSpanishIban iban) bankCode
-  where (_ibanPrefix, ccc)   = splitAt 4 iban
-        (bankCode, _)        = splitAt 4 ccc
+_bankDigits :: Text -> Text
+_bankDigits iban = assert (validSpanishIban iban) bankDigits_
+  where (_ibanPrefix, ccc)      = splitAt 4 iban
+        (bankDigits_, _)        = splitAt 4 ccc
 
 -- | Getter for the four digits code for bank offices.
-office :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
-office = L.to _office
+officeDigits :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
+officeDigits = L.to _officeDigits
 
-_office :: Text -> Text
-_office iban = assert (validSpanishIban iban) officeCode
-  where (_ibanPrefix, office_dc_num) = splitAt 8 iban
-        (officeCode, _)              = splitAt 4 office_dc_num
+_officeDigits :: Text -> Text
+_officeDigits iban = assert (validSpanishIban iban) officeDigits_
+  where (_ibanPrefix, office_dc_num)   = splitAt 8 iban
+        (officeDigits_, _)              = splitAt 4 office_dc_num
 
 validSpanishIban :: Text -> Bool
 validSpanishIban iban_ =
@@ -81,14 +81,14 @@ spanishIbanPrefixFromCcc ccc =
 -- Pre: 'num' contains exactly 10 decimal digits.
 -- Returned value contains exactly 2 decimal digits.
 cccControlDigits :: Text -> Text -> Text -> Text
-cccControlDigits bankCode office_ num =
-  assert (    all CH.isDigit bankCode && length bankCode ==  4
+cccControlDigits bank office_ num =
+  assert (    all CH.isDigit bank     && length bank ==  4
            && all CH.isDigit office_  && length office_ ==  4
            && all CH.isDigit num      && length num    == 10 )
   $ pack [firstDigit, secondDigit]
   where
     -- CH.digitToInt fails if not isHexDigit
-    firstDigit                        = cccDigit (bankCode ++ office_)
+    firstDigit                        = cccDigit (bank ++ office_)
     secondDigit                       = cccDigit num
     cccDigit                          = intsToDigit . stringToInts . unpack
     stringToInts str                  = reverse $ map CH.digitToInt str

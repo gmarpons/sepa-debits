@@ -22,6 +22,7 @@ import           Guia.BillingConcept
 import           Guia.Creditor
 import           Guia.Debtor
 import           Guia.DirectDebit
+import           Guia.SpanishIban
 -- import qualified Text.Printf                                                    as PF
 --  (printf)
 import           Text.XML               hiding (writeFile)
@@ -37,17 +38,17 @@ import qualified Data.Time.LocalTime as T
 -- Type synonims
 
 type BankMap = M.Map Text SpanishBank
-  
+
 
 -- Recursive transformation DirectDebitSet -> Document
 
 message :: DirectDebitSet -> BankMap -> Document                      -- *
-message dds bkL = Document prologue root epilogue
+message dds bkM = Document prologue root epilogue
   where
     prologue = Prologue [] Nothing []
     root     = Element "CstmrDrctDbtInitn" M.empty subnodes
     epilogue = []
-    subnodes = grpHdr dds : pmtInf_L dds bkL
+    subnodes = grpHdr dds : pmtInf_L dds bkM
 
 grpHdr :: DirectDebitSet -> Node                                      -- +
 grpHdr dds = nodeElem "GrpHdr" subnodes
@@ -80,21 +81,21 @@ nm c = nodeContent "Nm" (c ^. fullName)
 -- | Returns one or two nodes of type "PmtInf", one for debits with new mandates and
 -- another for old ones.
 pmtInf_L :: DirectDebitSet -> BankMap -> [Node]                       -- *
-pmtInf_L dds bkL =
+pmtInf_L dds bkM =
   concat $ (pmtInf' True new, pmtInf' False old) ^.. both
   where
     -- Use of lenses and list comprehensions
     (new, old) = span (^. mandate.isNew) (dds ^.. debits.traverse)
-    pmtInf' areNew ddL = [pmtInf areNew ddL dds bkL| not (null ddL)]
+    pmtInf' areNew ddL = [pmtInf areNew ddL dds bkM| not (null ddL)]
 
 pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> BankMap ->
           Node                                                        -- +
-pmtInf areNew ddL dds bkL = nodeElem "pmtInf" subnodes
+pmtInf areNew ddL dds bkM = nodeElem "pmtInf" subnodes
   where
     subnodes = [ pmtInfId areNew dds, pmtMtd, btchBookg, nbOfTxs_2_4 ddL
                , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt dds
                , cdtr (dds ^. creditor), cdtrAcct (dds ^. creditor)
-               , cdtrAgt (dds ^. creditor) bkL ]
+               , cdtrAgt (dds ^. creditor) bkM ]
 
 pmtInfId :: Bool -> DirectDebitSet -> Node                            -- ++
 pmtInfId areNew dds = nodeContent "MsgId" paymentId
@@ -158,7 +159,17 @@ iban_ :: Creditor -> Node
 iban_ c = nodeContent "IBAN" (c ^. creditorIban)                      -- ++++
 
 cdtrAgt :: Creditor -> BankMap -> Node                                -- ++
-cdtrAgt c bkL = nodeElem "CdtrAgt" []
+cdtrAgt c bkM = nodeElem "CdtrAgt" [finInstnId c bkM]
+
+finInstnId :: Creditor -> BankMap -> Node                             -- +++
+finInstnId c bkM = nodeElem "FinInstnId" [bic_2_21 c bkM]
+
+bic_2_21 :: Creditor -> BankMap -> Node                               -- ++++
+bic_2_21 c bkM = nodeContent "BIC" bicOfc
+  where
+    bicOfc = case lookup (c ^. creditorIban ^. bankDigits) bkM of
+      Just bk   -> take 8 (bk ^. bic) -- Office code is optional
+      Nothing   -> error "bic_2_21: can't lookup SpanishBank"
 
 
 -- Helper functions for nodes without attributes
@@ -222,16 +233,16 @@ addWorkingDays i d =
 -- Rendering and writing of messages
 
 renderMessage :: DirectDebitSet -> BankMap -> LT.Text
-renderMessage dds bkL = renderText settings (message dds bkL)
+renderMessage dds bkM = renderText settings (message dds bkM)
   where
     settings = def { rsPretty = False }
 
 -- | Write direct debits instructions message to XML file, with a decent pretty-printer
 -- (the one coming with Text.XML puts significant whitespace in content nodes).
 writeMessageToFile :: DirectDebitSet -> BankMap -> IO ()
-writeMessageToFile dds bkL = do
+writeMessageToFile dds bkM = do
   -- TODO: handle possible error
-  let (Just xmlParsedLight) = LXML.parseXMLDoc (renderMessage dds bkL)
+  let (Just xmlParsedLight) = LXML.parseXMLDoc (renderMessage dds bkM)
   writeFile "Test.xml" (LXML.ppTopElement xmlParsedLight)
 
 
