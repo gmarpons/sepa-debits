@@ -13,8 +13,17 @@ module Guia.DirectDebitMessageXML
 
          -- To test only
          dds_,
-         insertDDS
+         insertDDS,
+         newDds,
+         newItem,
+         banksMap
        ) where
+
+-- For testing only
+import qualified Database.Persist.MongoDB as DB
+import qualified Guia.MongoUtils as DB
+import qualified Data.Time.LocalTime as T
+
 
 import qualified Prelude
   (zip)
@@ -40,11 +49,6 @@ import qualified Text.Printf                                                    
 import           Text.XML               hiding (writeFile)
 import qualified Text.XML.Light.Input                                           as LXML
 import qualified Text.XML.Light.Output                                          as LXML
-
--- For testing only
-import qualified Database.Persist.MongoDB as DB
-import qualified Guia.MongoUtils as DB
-import qualified Data.Time.LocalTime as T
 
 
 -- Type synonims
@@ -98,7 +102,10 @@ ctrlSum_1_7 =
   nodeContent "CtrlSum" . priceToText . sumOf (traverse.items.traverse.finalPrice)
 
 initgPty :: DirectDebitSet -> Node                                    -- ++
-initgPty dds = nodeElem "InitgPty" [nm (dds ^. creditor.fullName)]
+initgPty dds = nodeElem "InitgPty" subnodes
+  where
+    -- Id of the initiating party needed, even if optional in SEPA specs.
+    subnodes = [nm (dds ^. creditor.fullName), id_cred_init (dds ^. creditor)]
 
 nm :: Text -> Node                                                    -- +++
 nm = nodeContent "Nm"
@@ -117,7 +124,7 @@ pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> BankMap ->
           Node                                                        -- +
 pmtInf areNew ddL dds bkM = nodeElem "PmtInf" subnodes
   where
-    subnodes = [ pmtInfId areNew dds, pmtMtd, btchBookg, nbOfTxs_2_4 ddL
+    subnodes = [ pmtInfId areNew dds, pmtMtd, {- btchBookg, -}nbOfTxs_2_4 ddL
                , ctrlSum_2_5 ddL, pmtTpInf areNew, reqdColltnDt areNew dds
                , cdtr c, cdtrAcct c, cdtrAgt c bkM, cdtrSchmeId c ]
                ++ drctDbtTxInf_L c ddL d bkM
@@ -133,8 +140,9 @@ pmtInfId areNew dds = nodeContent "PmtInfId" paymentId
 pmtMtd :: Node                                                        -- ++
 pmtMtd = nodeContent "PmtMtd" ("DD" :: Text)
 
-btchBookg :: Node                                                     -- ++
-btchBookg = nodeContent "BtchBookg" ("TRUE" :: Text)
+-- "BtchBookg" is optional and seems to cause trouble
+-- btchBookg :: Node                                                     -- ++
+-- btchBookg = nodeContent "BtchBookg" ("true" :: Text)
 
 nbOfTxs_2_4 :: [DirectDebit] -> Node                                  -- ++
 nbOfTxs_2_4 = nodeContent "NbOfTxs" . length
@@ -198,19 +206,20 @@ bic_ i bkM = nodeContent "BIC" bicOfc
       Nothing   -> error "bic_: can't lookup SpanishBank"
 
 cdtrSchmeId :: Creditor -> Node                                       -- ++
-cdtrSchmeId c = nodeElem "CdtrSchmeId" [id_2_27 c]
+cdtrSchmeId c = nodeElem "CdtrSchmeId" [id_cred_init c]
 
-id_2_27 :: Creditor -> Node                                           -- +++
-id_2_27 c = nodeElem "Id" [prvtId c]
+-- Identifies both the creditor and the initiating party
+id_cred_init :: Creditor -> Node                                           -- +++
+id_cred_init c = nodeElem "Id" [prvtId c]
 
 prvtId :: Creditor -> Node                                            -- ++++
 prvtId c = nodeElem "PrvtId" [othr c]
 
 othr :: Creditor -> Node                                              -- +++++
-othr c = nodeElem "Othr" [id_2_27_b c, schmeNm]
+othr c = nodeElem "Othr" [id_cred_init_b c, schmeNm]
 
-id_2_27_b :: Creditor -> Node                                         -- ++++++
-id_2_27_b c = nodeContent "Id" (c ^. sepaId)
+id_cred_init_b :: Creditor -> Node                                         -- ++++++
+id_cred_init_b c = nodeContent "Id" (c ^. sepaId)
 
 schmeNm :: Node                                                       -- ++++++
 schmeNm = nodeElem "SchmeNm" [prtry]
@@ -348,7 +357,7 @@ addWorkingDays i d =
   assert (i >= 0)
   $ case nextWorkDays of { n : _ -> n; [] -> error "addWorkingDays" }
   where
-    nextWorkDays    = L.genericDrop (if (isWorkDay d) then i else i - 1) allWorkDays
+    nextWorkDays    = L.genericDrop (if isWorkDay d then i else i - 1) allWorkDays
     allWorkDays     = filter isWorkDay (allDaysSince d)
     isWorkDay    d_ = not $ any ($ d_) [isWeekend, isFest 1 1, isFest 5 1, isFest 12 25
                                  , isFest 12 26, isEasterFOrM]
@@ -428,3 +437,43 @@ insertDDS = DB.runDb $ do
   DB.deleteWhere ([] :: [DB.Filter DirectDebitSet])
   DB.insert_ dds
   return ()
+
+newDds :: IO (DB.Key DirectDebitSet)
+newDds = DB.runDb $ do
+  now <- liftIO T.getZonedTime
+  (Just cE)  <- DB.selectFirst ([] :: [DB.Filter Creditor]) []
+  let c = DB.entityVal cE
+      dds = mkDirectDebitSet "Febrer" now c []
+  DB.insert dds
+
+newItem :: DB.Key DirectDebitSet -> Text -> Text -> [(Text, Maybe Int)] -> IO [DirectDebit]
+newItem ddsK last first_ concepts = do
+  bkM <- banksMap
+  DB.runDb $ do
+    dds   <- DB.getJust ddsK
+    dEL   <- getDebtorByName first_ last
+    bcEL  <- DB.selectList  ([] :: [DB.Filter BillingConcept]) []
+    let d = case dEL of
+          []           -> error "Ningú amb aquest nom"
+          (dE : [])    -> DB.entityVal dE
+          (_ : _ : _)  -> error "Masses alumnes amb aquest nom"
+        bcM = M.fromList
+              $ map (\e -> (DB.entityVal e ^. shortName, DB.entityVal e)) bcEL
+    --liftIO $ putStrLn $ pack $ show bcM
+    let bcL = map (\(short, mPrice) -> changePrice mPrice (bcM M.! short)) concepts
+        changePrice Nothing   bc = bc
+        changePrice (Just p)  bc = bc & basePrice .~ p
+        m = case d ^. mandates of
+          [] -> error "L'alumne no té mandat"
+          (m' : _) -> if M.member (m' ^. iban ^. bankDigits) bkM then m'
+                      else error "No existeix el banc!"
+        dd = mkDirectDebit first_ last m bcL
+        ddL = dd : dds ^. debits
+        dds' = dds & debits .~ ddL
+    DB.replace ddsK dds'
+    return ddL
+
+banksMap :: IO BankMap
+banksMap = DB.runDb $ do
+  bkL <- DB.selectList ([] :: [DB.Filter SpanishBank]) []
+  return $ M.fromList $ map (\e -> (DB.entityVal e ^. fourDigitsCode, DB.entityVal e)) bkL

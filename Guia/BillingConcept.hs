@@ -46,19 +46,19 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 
 -- Billing concepts
 
-mkBillingConcept :: Text -> Maybe Text -> Maybe Int -> Maybe Int -> BillingConcept
+mkBillingConcept :: Text -> Text -> Maybe Int -> Maybe Int -> BillingConcept
 mkBillingConcept short long price vat =
   assert (validBillingConcept short long price vat)
   -- We set defaults for basePrice and vatRatio, if not given
   $ BillingConcept short long (fromMaybe 0 price) (fromMaybe 21 vat)
 
-validBillingConcept :: Text -> Maybe Text -> Maybe Int -> Maybe Int -> Bool
+validBillingConcept :: Text -> Text -> Maybe Int -> Maybe Int -> Bool
 validBillingConcept short long price vat =
      not (null short) && length short <= maxLengthShortName
   && length long <= maxLengthLongName
   && fromMaybe 0 price >= 0
   && fromMaybe 0 vat   >= 0
-  where maxLengthShortName = 8  -- To be able to concat many of them in a line
+  where maxLengthShortName = 10 -- To be able to concat many of them in a line
         maxLengthLongName  = 70 -- GUI constraint
 
 -- | Getter for basePrice * vatRatio.

@@ -42,8 +42,11 @@ module Guia.Debtor
          validSpanishBankBic,
 
          insertDebtor,
-         cleanDebtors
+         cleanDebtors,
+         getDebtorByName
        ) where
+
+import           Database.Persist ((==.))
 
 import           ClassyPrelude
 import           Control.Lens
@@ -54,9 +57,9 @@ import qualified Data.Char                                                      
 import qualified Data.List                                                      as LT
 import qualified Data.Time.Calendar                                             as T
 import qualified Database.Persist.MongoDB                                       as DB
-  (Filter, Key, PersistEntityBackend,
-   PersistMonadBackend, PersistQuery,
-   deleteWhere, insert)
+  -- (Filter, Key, PersistEntityBackend,
+  --  PersistMonadBackend, PersistQuery,
+  --  deleteWhere, insert)
 import qualified Database.Persist.Quasi                                         as DB
   (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
@@ -176,4 +179,7 @@ insertDebtor debtor = runDb $ DB.insert debtor
 
 cleanDebtors :: (DB.PersistQuery m,
                  DB.PersistEntityBackend Debtor ~ DB.PersistMonadBackend m) => m ()
-cleanDebtors = DB.deleteWhere ([] :: [DB.Filter Debtor])
+cleanDebtors = DB.deleteWhere ([FirstName ==. ""] :: [DB.Filter Debtor])
+
+getDebtorByName first last = DB.selectList [ FirstName ==. first
+                                           , LastName  ==. last] []
