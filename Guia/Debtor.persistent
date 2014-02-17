@@ -25,5 +25,4 @@ SpanishBank                   sql=spanish_banks
 
   -- Unique constraints
   UniqueFourDigitsCode        fourDigitsCode
-  UniqueBic                   bic
   deriving Eq Read Show

@@ -1,4 +1,4 @@
-DirectDebitSet                sql=direct_debit_set
+DirectDebitSet                sql=direct_debit_sets
   description                 Text                -- Determines file name
   creationTime                T.ZonedTime         -- Includes Day and TimeOfDay,
                                                   -- applied to current TimeZone.
