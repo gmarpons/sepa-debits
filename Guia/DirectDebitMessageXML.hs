@@ -1,5 +1,4 @@
 {-# LANGUAGE
-  FlexibleContexts,
   FlexibleInstances,
   GADTs,
   NoImplicitPrelude,
@@ -10,20 +9,7 @@
 module Guia.DirectDebitMessageXML
        ( writeMessageToFile,
          renderMessage,
-
-         -- To test only
-         dds_,
-         insertDDS,
-         newDds,
-         newItem,
-         banksMap
        ) where
-
--- For testing only
-import qualified Database.Persist.MongoDB as DB
-import qualified Guia.MongoUtils as DB
-import qualified Data.Time.LocalTime as T
-
 
 import qualified Prelude
   (zip)
@@ -39,6 +25,7 @@ import qualified Data.Text.Lazy                                                 
 import qualified Data.Text.Lazy.Encoding                                        as LT
 import qualified Data.Time.Calendar                                             as T
 import qualified Data.Time.Calendar.Easter                                      as T
+import qualified Data.Time.LocalTime                                            as T
 import           Guia.BillingConcept
 import           Guia.Creditor
 import           Guia.Debtor
@@ -57,9 +44,6 @@ type BankMap = M.Map Text SpanishBank
 
 
 -- Recursive transformation DirectDebitSet -> Document
-
--- <Document xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
--- xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.02">
 
 message :: DirectDebitSet -> BankMap -> Document                      -- *
 message dds bkM = Document prologue root epilogue
@@ -407,73 +391,3 @@ writeMessageToFile dds bkM = do
   -- TODO: look at text-icu library normalization mode for transliteration and drop
   -- dependency on iconv.
   writeFile "Test.xml" $ IC.convertFuzzy IC.Transliterate "UTF-8" "ASCII" xmlBS
-
-
--- Test data
-
-dds_ :: IO DirectDebitSet
-dds_ = do
-  (Just ddsE) <- DB.runDb $ DB.selectFirst ([] :: [DB.Filter DirectDebitSet]) []
-  return $ DB.entityVal ddsE
-
-insertDDS :: IO ()
-insertDDS = DB.runDb $ do
-  now <- liftIO T.getZonedTime
-  liftIO $ putStrLn "Get creditor"
-  (Just cE)  <- DB.selectFirst ([] :: [DB.Filter Creditor])       []
-  liftIO $ putStrLn "Get debtor"
-  dEL  <- DB.selectList ([] :: [DB.Filter Debtor])         []
-  liftIO $ putStrLn "Get billing concept"
-  bcEL       <- DB.selectList  ([] :: [DB.Filter BillingConcept]) []
-  let c = DB.entityVal cE
-      (d1 : d2 : _) = map DB.entityVal dEL
-      (m1 : _) = d1 ^.. mandates.traversed
-      (m2 : _) = d2 ^.. mandates.traversed
-      (bc1 : bc2 : _) = map DB.entityVal bcEL
-      dd1 = mkDirectDebit (d1 ^. firstName) (d1 ^. lastName) m1 [bc1, bc2, bc1]
-      dd2 = mkDirectDebit (d2 ^. firstName) (d2 ^. lastName) m2 [bc1]
-      dds = mkDirectDebitSet "New DdSet" now c [dd1, dd2]
-  liftIO $ putStrLn "Insert"
-  DB.deleteWhere ([] :: [DB.Filter DirectDebitSet])
-  DB.insert_ dds
-  return ()
-
-newDds :: IO (DB.Key DirectDebitSet)
-newDds = DB.runDb $ do
-  now <- liftIO T.getZonedTime
-  (Just cE)  <- DB.selectFirst ([] :: [DB.Filter Creditor]) []
-  let c = DB.entityVal cE
-      dds = mkDirectDebitSet "Febrer" now c []
-  DB.insert dds
-
-newItem :: DB.Key DirectDebitSet -> Text -> Text -> [(Text, Maybe Int)] -> IO [DirectDebit]
-newItem ddsK last first_ concepts = do
-  bkM <- banksMap
-  DB.runDb $ do
-    dds   <- DB.getJust ddsK
-    dEL   <- getDebtorByName first_ last
-    bcEL  <- DB.selectList  ([] :: [DB.Filter BillingConcept]) []
-    let d = case dEL of
-          []           -> error "Ningú amb aquest nom"
-          (dE : [])    -> DB.entityVal dE
-          (_ : _ : _)  -> error "Masses alumnes amb aquest nom"
-        bcM = M.fromList
-              $ map (\e -> (DB.entityVal e ^. shortName, DB.entityVal e)) bcEL
-    --liftIO $ putStrLn $ pack $ show bcM
-    let bcL = map (\(short, mPrice) -> changePrice mPrice (bcM M.! short)) concepts
-        changePrice Nothing   bc = bc
-        changePrice (Just p)  bc = bc & basePrice .~ p
-        m = case d ^. mandates of
-          [] -> error "L'alumne no té mandat"
-          (m' : _) -> if M.member (m' ^. iban ^. bankDigits) bkM then m'
-                      else error "No existeix el banc!"
-        dd = mkDirectDebit first_ last m bcL
-        ddL = dd : dds ^. debits
-        dds' = dds & debits .~ ddL
-    DB.replace ddsK dds'
-    return ddL
-
-banksMap :: IO BankMap
-banksMap = DB.runDb $ do
-  bkL <- DB.selectList ([] :: [DB.Filter SpanishBank]) []
-  return $ M.fromList $ map (\e -> (DB.entityVal e ^. fourDigitsCode, DB.entityVal e)) bkL

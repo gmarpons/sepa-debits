@@ -1,9 +1,5 @@
 {-# LANGUAGE
-  DeriveDataTypeable,
-  FlexibleContexts,
-  FlexibleInstances,
   GADTs,
-  GeneralizedNewtypeDeriving,
   NoImplicitPrelude,
   OverloadedStrings,
   TemplateHaskell,

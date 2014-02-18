@@ -1,10 +1,6 @@
 {-# LANGUAGE
-  FlexibleContexts,
-  FlexibleInstances,
-  GADTs,
   NoImplicitPrelude,
-  OverloadedStrings,
-  TypeFamilies
+  OverloadedStrings
   #-}
 
 module Guia.SpanishIban

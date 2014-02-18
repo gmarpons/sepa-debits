@@ -1,9 +1,5 @@
 {-# LANGUAGE
-  DeriveDataTypeable,
-  FlexibleContexts,
-  FlexibleInstances,
   GADTs,
-  GeneralizedNewtypeDeriving,
   NoImplicitPrelude,
   OverloadedStrings,
   TemplateHaskell,
@@ -39,14 +35,8 @@ module Guia.Debtor
          bic,
          bankName,
          validSpanishBank,
-         validSpanishBankBic,
-
-         insertDebtor,
-         cleanDebtors,
-         getDebtorByName
+         validSpanishBankBic
        ) where
-
-import           Database.Persist ((==.))
 
 import           ClassyPrelude
 import           Control.Lens
@@ -56,16 +46,11 @@ import qualified Data.Char                                                      
   (isDigit, isUpper)
 import qualified Data.List                                                      as LT
 import qualified Data.Time.Calendar                                             as T
-import qualified Database.Persist.MongoDB                                       as DB
-  -- (Filter, Key, PersistEntityBackend,
-  --  PersistMonadBackend, PersistQuery,
-  --  deleteWhere, insert)
 import qualified Database.Persist.Quasi                                         as DB
   (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
 import           Guia.MongoSettings
-import           Guia.MongoUtils
 import           Guia.SpanishIban
 
 
@@ -170,16 +155,3 @@ validSpanishBankBic bic_ =   length bic_ == 11
         (country, suffix')    = splitAt 2 suffix
         (location, branch)    = splitAt 2 suffix'
         isDigitOrUpper c      = CH.isDigit c || CH.isUpper c
-
-
--- Old stuff, deprecated
-
-insertDebtor :: Debtor -> IO (DB.Key Debtor)
-insertDebtor debtor = runDb $ DB.insert debtor
-
-cleanDebtors :: (DB.PersistQuery m,
-                 DB.PersistEntityBackend Debtor ~ DB.PersistMonadBackend m) => m ()
-cleanDebtors = DB.deleteWhere ([FirstName ==. ""] :: [DB.Filter Debtor])
-
-getDebtorByName first last = DB.selectList [ FirstName ==. first
-                                           , LastName  ==. last] []
