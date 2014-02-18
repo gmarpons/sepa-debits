@@ -11,9 +11,6 @@ module Guia.DirectDebitMessageXML
          renderMessage,
        ) where
 
-import qualified Prelude
-  (zip)
-
 import           ClassyPrelude
 import qualified Codec.Text.IConv                                               as IC
 import           Control.Lens
@@ -215,7 +212,7 @@ drctDbtTxInf_L :: Creditor -> [DirectDebit] -> T.ZonedTime -> BankMap ->
                   [Node]                                              -- *
 drctDbtTxInf_L c ddL d bkM = map (\idd -> drctDbtTxInf idd c d bkM) indexedDdL
   where
-    indexedDdL = Prelude.zip [1..] ddL
+    indexedDdL = zip [1..] ddL
 
 drctDbtTxInf :: (Int, DirectDebit) -> Creditor -> T.ZonedTime -> BankMap ->
                 Node                                                  -- ++
