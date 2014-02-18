@@ -16,7 +16,7 @@ import           Control.Monad.Trans.Control
 import           Data.List
 import           Data.Maybe
 import           Data.Text                                                      as T
-  (concat, pack, split, unpack)
+  (concat, pack, replace, split, unpack)
 import qualified Database.Persist.MongoDB                                       as DB
 import           Graphics.UI.Gtk
 import           Guia.BillingConcept
@@ -164,5 +164,4 @@ mkTreeViewColumnsAndModel view mModel titlesAndFuncs = do
   return model
 
 priceToStringSep :: String -> Int -> String
-priceToStringSep separator =
-  T.unpack . T.concat . intersperse (pack separator) . T.split (=='.') . priceToText
+priceToStringSep separator = T.unpack . T.replace "." (pack separator) . priceToText
