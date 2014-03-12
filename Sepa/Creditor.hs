@@ -6,7 +6,7 @@
   TypeFamilies
   #-}
 
-module Guia.Creditor
+module Sepa.Creditor
        ( -- Creditor
          mkCreditor,
          Creditor, CreditorId,
@@ -24,15 +24,15 @@ import qualified Database.Persist.Quasi                                         
   (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
-import           Guia.MongoSettings
-import           Guia.SpanishIban
+import           Sepa.MongoSettings
+import           Sepa.SpanishIban
 
 
 -- WARNING: the use of lenses (setters) can violate the invariants of the Abstract Data
 -- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
-  $(DB.persistFileWith DB.upperCaseSettings "Guia/Creditor.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Sepa/Creditor.persistent")
 
 
 -- Creditors

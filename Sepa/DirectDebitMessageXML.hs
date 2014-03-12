@@ -6,7 +6,7 @@
   TypeFamilies
   #-}
 
-module Guia.DirectDebitMessageXML
+module Sepa.DirectDebitMessageXML
        ( writeMessageToFile,
          renderMessage,
        ) where
