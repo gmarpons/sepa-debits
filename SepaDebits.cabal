@@ -46,9 +46,9 @@ library
                         xml                     >= 1.3.13   && < 1.4,
                         xml-conduit             >= 1.1.0.9  && < 1.2
   default-language:     Haskell2010
-  default-extensions:   NoImplicitPrelude,
-                        OverloadedStrings
-  other-extensions:     TemplateHaskell
+  default-extensions:   OverloadedStrings
+  other-extensions:     NoImplicitPrelude,
+                        TemplateHaskell
   ghc-options:          -threaded
 
 executable sepa-debits
@@ -83,7 +83,7 @@ executable sepa-debits
                         xml-conduit             >= 1.1.0.9  && < 1.2,
                         sepa-debits
   default-language:     Haskell2010
-  default-extensions:   NoImplicitPrelude,
-                        OverloadedStrings
-  other-extensions:     TemplateHaskell
+  default-extensions:   OverloadedStrings
+  other-extensions:     NoImplicitPrelude,
+                        TemplateHaskell
   ghc-options:          -threaded
