@@ -12,7 +12,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Control
 import           Data.List
 import           Data.Maybe
-import           Data.Text                   as T (concat, pack, replace, split,
+import qualified Data.Text                   as T (concat, pack, replace, split,
                                                    unpack)
 import qualified Database.Persist.MongoDB    as DB
 import           Graphics.UI.Gtk
@@ -24,7 +24,7 @@ main :: IO ()
 main = do
   initGUI
   builder <- builderNew
-  builderAddFromFile builder "glade/GuiaDirectDebits.glade"
+  builderAddFromFile builder "glade/SepaDebits.glade"
   mainWd <- builderGetObject builder castToWindow "mainWd"
   mwExitBt <- builderGetObject builder castToButton "mwExitBt"
   on mwExitBt buttonActivated $ widgetDestroy mainWd >> mainQuit
@@ -38,7 +38,7 @@ type PanelDescr = (PanelId, (String, String))
 
 panels :: [PanelDescr]
 panels =
-    [ ("payers",          ("payersTb",          "payersVb"         ))
+    [ ("debtors",         ("debtorsTb",         "debtorsVb"         ))
     , ("billingConcepts", ("billingConceptsTb", "billingConceptsVb"))
     , ("invoicings",      ("invoicingsTb",      "invoicingsVb"     ))
     ]
@@ -161,4 +161,4 @@ mkTreeViewColumnsAndModel view mModel titlesAndFuncs = do
   return model
 
 priceToStringSep :: String -> Int -> String
-priceToStringSep separator = T.unpack . T.replace "." (pack separator) . priceToText
+priceToStringSep separator = T.unpack . T.replace "." (T.pack separator) . priceToText

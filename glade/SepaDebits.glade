@@ -360,7 +360,7 @@
     <property name="use_action_appearance">False</property>
     <property name="image">cancelInvoicingIcon</property>
   </object>
-  <object class="GtkImage" id="cancelPayerIcon">
+  <object class="GtkImage" id="cancelDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-cancel</property>
@@ -383,7 +383,7 @@
     <property name="receives_default">True</property>
     <property name="use_action_appearance">False</property>
   </object>
-  <object class="GtkImage" id="deletePayerIcon">
+  <object class="GtkImage" id="deleteDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
@@ -403,7 +403,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
   </object>
-  <object class="GtkImage" id="editPayerIcon">
+  <object class="GtkImage" id="editDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
@@ -623,7 +623,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <child>
-                      <object class="GtkTreeView" id="payersInInvoicingTv">
+                      <object class="GtkTreeView" id="debtorsInInvoicingTv">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child internal-child="selection">
@@ -1013,7 +1013,7 @@
                 <property name="can_focus">False</property>
                 <property name="layout_style">start</property>
                 <child>
-                  <object class="GtkToggleButton" id="payersTb">
+                  <object class="GtkToggleButton" id="debtorsTb">
                     <property name="label" translatable="yes">Alumnes</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -1079,7 +1079,7 @@
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <child>
-              <object class="GtkVBox" id="payersVb">
+              <object class="GtkVBox" id="debtorsVb">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <child>
@@ -1095,7 +1095,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child>
-                          <object class="GtkTreeView" id="payersTv">
+                          <object class="GtkTreeView" id="debtorsTv">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="reorderable">True</property>
@@ -1132,14 +1132,14 @@
                                 <property name="spacing">10</property>
                                 <property name="layout_style">start</property>
                                 <child>
-                                  <object class="GtkToggleButton" id="editPayerTb">
+                                  <object class="GtkToggleButton" id="editDebtorTb">
                                     <property name="label" translatable="yes">Modifica l'alumne</property>
                                     <property name="use_action_appearance">False</property>
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="receives_default">True</property>
                                     <property name="use_action_appearance">False</property>
-                                    <property name="image">editPayerIcon</property>
+                                    <property name="image">editDebtorIcon</property>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -1148,14 +1148,14 @@
                                   </packing>
                                 </child>
                                 <child>
-                                  <object class="GtkToggleButton" id="newPayerTb">
+                                  <object class="GtkToggleButton" id="newDebtorTb">
                                     <property name="label" translatable="yes">Afegeix un nou alumne</property>
                                     <property name="use_action_appearance">False</property>
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="receives_default">True</property>
                                     <property name="use_action_appearance">False</property>
-                                    <property name="image">newPayerIcon</property>
+                                    <property name="image">newDebtorIcon</property>
                                   </object>
                                   <packing>
                                     <property name="expand">False</property>
@@ -1171,14 +1171,14 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkButton" id="deletePayerBt">
+                              <object class="GtkButton" id="deleteDebtorBt">
                                 <property name="label" translatable="yes">Elimina l'alumne</property>
                                 <property name="use_action_appearance">False</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
                                 <property name="use_action_appearance">False</property>
-                                <property name="image">deletePayerIcon</property>
+                                <property name="image">deleteDebtorIcon</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1579,14 +1579,14 @@
                             <property name="spacing">10</property>
                             <property name="layout_style">center</property>
                             <child>
-                              <object class="GtkButton" id="savePayerBt">
+                              <object class="GtkButton" id="saveDebtorBt">
                                 <property name="label" translatable="yes">Desa l'alumne</property>
                                 <property name="use_action_appearance">False</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
                                 <property name="use_action_appearance">False</property>
-                                <property name="image">savePayerIcon</property>
+                                <property name="image">saveDebtorIcon</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1595,14 +1595,14 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkButton" id="cancelPayerBt">
+                              <object class="GtkButton" id="cancelDebtorBt">
                                 <property name="label" translatable="yes">Cancel·la els canvis</property>
                                 <property name="use_action_appearance">False</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
                                 <property name="use_action_appearance">False</property>
-                                <property name="image">cancelPayerIcon</property>
+                                <property name="image">cancelDebtorIcon</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1715,7 +1715,7 @@
     <property name="receives_default">True</property>
     <property name="use_action_appearance">False</property>
   </object>
-  <object class="GtkImage" id="newPayerIcon">
+  <object class="GtkImage" id="newDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
@@ -1745,7 +1745,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-save</property>
   </object>
-  <object class="GtkImage" id="savePayerIcon">
+  <object class="GtkImage" id="saveDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-save</property>
