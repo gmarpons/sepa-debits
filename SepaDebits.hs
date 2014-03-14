@@ -1,6 +1,9 @@
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
-import ClassyPrelude
+import           ClassyPrelude
 
 main :: IO ()
 main = return ()
