@@ -6,7 +6,7 @@
   TypeFamilies
   #-}
 
-module Guia.DirectDebitMessageXML
+module Sepa.DirectDebitMessageXML
        ( writeMessageToFile,
          renderMessage,
        ) where
@@ -23,11 +23,11 @@ import qualified Data.Text.Lazy.Encoding                                        
 import qualified Data.Time.Calendar                                             as T
 import qualified Data.Time.Calendar.Easter                                      as T
 import qualified Data.Time.LocalTime                                            as T
-import           Guia.BillingConcept
-import           Guia.Creditor
-import           Guia.Debtor
-import           Guia.DirectDebit
-import           Guia.SpanishIban
+import           Sepa.BillingConcept
+import           Sepa.Creditor
+import           Sepa.Debtor
+import           Sepa.DirectDebit
+import           Sepa.SpanishIban
 import qualified Text.Printf                                                    as PF
  (printf)
 import           Text.XML               hiding (writeFile)

@@ -3,7 +3,7 @@
   TemplateHaskell
   #-}
 
-module Guia.MongoSettings
+module Sepa.MongoSettings
        ( mongoSettings
        ) where
 

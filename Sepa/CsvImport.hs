@@ -10,7 +10,7 @@
   TypeFamilies
   #-}
 
-module Guia.CsvImport where
+module Sepa.CsvImport where
 
 import qualified Prelude        -- ClassyPrelude.unzip doesn't work
   (unzip)
@@ -64,10 +64,10 @@ import qualified Database.Persist.Quasi                                         
   (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
-import           Guia.Debtor
-import           Guia.MongoSettings
-import           Guia.MongoUtils
-import           Guia.SpanishIban
+import           Sepa.Debtor
+import           Sepa.MongoSettings
+import           Sepa.MongoUtils
+import           Sepa.SpanishIban
 import qualified System.IO                                                      as IO
   (IOMode(ReadMode),
    openFile)
@@ -78,7 +78,7 @@ import qualified Text.Printf                                                    
 
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = True }]
-  $(DB.persistFileWith DB.upperCaseSettings "Guia/CsvImport.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Sepa/CsvImport.persistent")
 
 
 -- Datatypes for CSV data

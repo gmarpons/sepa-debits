@@ -6,7 +6,7 @@
   TypeFamilies
   #-}
 
-module Guia.DirectDebit
+module Sepa.DirectDebit
        ( -- Direct debit instructions set
          mkDirectDebitSet,
          DirectDebitSet, DirectDebitSetId,
@@ -40,17 +40,17 @@ import qualified Database.Persist.Quasi                                         
   (upperCaseSettings)
 import qualified Database.Persist.TH                                            as DB
   (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
-import           Guia.BillingConcept
-import           Guia.Creditor
-import           Guia.Debtor
-import           Guia.MongoSettings
+import           Sepa.BillingConcept
+import           Sepa.Creditor
+import           Sepa.Debtor
+import           Sepa.MongoSettings
 
 
 -- WARNING: the use of lenses (setters) can violate the invariants of the Abstract Data
 -- Types in this module.
 DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
                                      , DB.mpsPrefixFields   = False }]
-  $(DB.persistFileWith DB.upperCaseSettings "Guia/DirectDebit.persistent")
+  $(DB.persistFileWith DB.upperCaseSettings "Sepa/DirectDebit.persistent")
 
 
 -- Direct debit instruction set

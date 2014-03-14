@@ -4,7 +4,7 @@
   OverloadedStrings
   #-}
 
-module Guia.MongoUtils where
+module Sepa.MongoUtils where
 
 import           ClassyPrelude
 import qualified Control.Monad.Trans.Resource                                   as R

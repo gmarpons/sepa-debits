@@ -3,7 +3,7 @@
   OverloadedStrings
   #-}
 
-module Guia.SpanishIban
+module Sepa.SpanishIban
        ( -- Spanish iban
          IBAN,
          bankDigits,
