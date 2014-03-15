@@ -6,15 +6,13 @@ module Main
        ( main
        ) where
 
-import           Control.Lens                hiding (set, view)
+import           Control.Lens             hiding (set, view)
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Control
 import           Data.List
-import           Data.Maybe
-import qualified Data.Text                   as T (concat, pack, replace, split,
-                                                   unpack)
-import qualified Database.Persist.MongoDB    as DB
+import qualified Data.Text                as T  (pack, replace, unpack)
+import qualified Data.Text.Lazy           as TL (unpack)
+import qualified Database.Persist.MongoDB as DB
+import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import           Sepa.BillingConcept
 import           Sepa.MongoUtils
@@ -95,15 +93,18 @@ mkBillingConceptsGui builder = do
   -- putStrLn $ "Number of billing concepts: " ++ show lsSize
   treeViewSetModel billingConceptsTv billingConceptsSm
   billingConceptsCols <- treeViewGetColumns billingConceptsTv
-  let renderFuncs = [ T.unpack . (^. longName)  . DB.entityVal
-                    , T.unpack . (^. shortName) . DB.entityVal
+  let renderFuncs = [ T.unpack      . (^. longName)   . DB.entityVal
+                    , T.unpack      . (^. shortName)  . DB.entityVal
+                    , priceToString . (^. basePrice)  . DB.entityVal
+                    , priceToString . (^. vatRatio)   . DB.entityVal
+                    , priceToString . (^. finalPrice) . DB.entityVal
                     ]
   -- forall columns: set renderer, set sorting func
   forM_ (zip3 billingConceptsCols renderFuncs [0..]) $ \(col, renderFunc, colId) -> do
     -- FIXME: column manual resizing doesn't work
     let cellLayout = toCellLayout col
-    (cell : _) <- cellLayoutGetCells cellLayout    -- FIXME: unsafe pattern
-    let textRenderer = castToCellRendererText cell -- FIXME: unsafe cast
+    (cell : _) <- cellLayoutGetCells cellLayout    -- FIXME: unsafe pattern, dep. on glade
+    let textRenderer = castToCellRendererText cell -- FIXME: unsafe cast, depends on glade
     cellLayoutSetAttributes col textRenderer billingConceptsLs $ \row ->
       [ cellText := renderFunc row ]
     let sortFunc xIter yIter = do
@@ -113,13 +114,17 @@ mkBillingConceptsGui builder = do
     treeSortableSetSortFunc billingConceptsSm colId sortFunc
     treeViewColumnSetSortColumnId col colId
   -- Incremental search in tree view
-  -- TODO: accent-independent search
+  -- TODO: accent-independent search or TreeModelFilter
   let equalFunc text iter = do
         childIter <- treeModelSortConvertIterToChildIter billingConceptsSm iter
         row <- customStoreGetRow billingConceptsLs childIter
-        return $ text `isInfixOf` concatMap ($ row) renderFuncs
+        return $ any (\f -> text `isInfixOf` f row) renderFuncs
   treeViewSetSearchEqualFunc billingConceptsTv (Just equalFunc)
   return ()
 
-priceToStringSep :: String -> Int -> String
-priceToStringSep separator = T.unpack . T.replace "." (T.pack separator) . priceToText
+priceToString :: Int -> String
+priceToString num = TL.unpack $ format (left padding ' ') (toText num)
+  where
+    toText    = T.replace "." (T.pack separator) . priceToText
+    separator = ","
+    padding   = 10

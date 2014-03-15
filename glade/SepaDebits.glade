@@ -50,7 +50,7 @@
                   <object class="GtkTreeSelection" id="treeview-selection2"/>
                 </child>
                 <child>
-                  <object class="GtkTreeViewColumn" id="billingConceptsTvC1">
+                  <object class="GtkTreeViewColumn" id="treeviewcolumn0">
                     <property name="resizable">True</property>
                     <property name="sizing">autosize</property>
                     <property name="title" translatable="yes">Descripció (no es pot repetir)</property>
@@ -63,15 +63,66 @@
                   </object>
                 </child>
                 <child>
-                  <object class="GtkTreeViewColumn" id="billingConceptsTvC2">
+                  <object class="GtkTreeViewColumn" id="treeviewcolumn1">
                     <property name="resizable">True</property>
-                    <property name="sizing">fixed</property>
+                    <property name="sizing">autosize</property>
                     <property name="title" translatable="yes">Etiqueta al rebut</property>
                     <property name="clickable">True</property>
                     <property name="sort_indicator">True</property>
                     <property name="sort_column_id">0</property>
                     <child>
                       <object class="GtkCellRendererText" id="cellrenderertext2"/>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="treeviewcolumn2">
+                    <property name="resizable">True</property>
+                    <property name="sizing">autosize</property>
+                    <property name="title" translatable="yes">Preu base</property>
+                    <property name="clickable">True</property>
+                    <property name="alignment">1</property>
+                    <property name="sort_indicator">True</property>
+                    <property name="sort_column_id">0</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="cellrenderertext3">
+                        <property name="xalign">1</property>
+                        <property name="alignment">right</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="treeviewcolumn3">
+                    <property name="resizable">True</property>
+                    <property name="sizing">autosize</property>
+                    <property name="title" translatable="yes">% IVA</property>
+                    <property name="clickable">True</property>
+                    <property name="alignment">1</property>
+                    <property name="sort_indicator">True</property>
+                    <property name="sort_column_id">0</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="cellrenderertext4">
+                        <property name="xalign">1</property>
+                        <property name="alignment">right</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="treeviewcolumn4">
+                    <property name="resizable">True</property>
+                    <property name="sizing">fixed</property>
+                    <property name="title" translatable="yes">Preu final</property>
+                    <property name="clickable">True</property>
+                    <property name="alignment">1</property>
+                    <property name="sort_indicator">True</property>
+                    <property name="sort_column_id">0</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="cellrenderertext5">
+                        <property name="xalign">1</property>
+                        <property name="alignment">right</property>
+                      </object>
                     </child>
                   </object>
                 </child>
@@ -1030,6 +1081,16 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
   </object>
+  <object class="GtkImage" id="newBillingConceptIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-new</property>
+  </object>
+  <object class="GtkImage" id="newDebtorIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-new</property>
+  </object>
   <object class="GtkWindow" id="mainWd">
     <property name="can_focus">False</property>
     <property name="title" translatable="yes">GUIA Gestió</property>
@@ -1727,16 +1788,6 @@
         </child>
       </object>
     </child>
-  </object>
-  <object class="GtkImage" id="newBillingConceptIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
-  </object>
-  <object class="GtkImage" id="newDebtorIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
   </object>
   <object class="GtkImage" id="newDirectDebitIcon">
     <property name="visible">True</property>
