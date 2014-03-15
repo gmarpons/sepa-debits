@@ -346,19 +346,19 @@
       </packing>
     </child>
   </object>
-  <object class="GtkImage" id="cancelInvoicingIcon">
+  <object class="GtkImage" id="cancelDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-cancel</property>
   </object>
-  <object class="GtkButton" id="cancelInvoicingBt">
+  <object class="GtkButton" id="cancelDirectDebitBt">
     <property name="label" translatable="yes">Cancel·la els canvis</property>
     <property name="use_action_appearance">False</property>
     <property name="visible">True</property>
     <property name="can_focus">True</property>
     <property name="receives_default">True</property>
     <property name="use_action_appearance">False</property>
-    <property name="image">cancelInvoicingIcon</property>
+    <property name="image">cancelDirectDebitIcon</property>
   </object>
   <object class="GtkImage" id="cancelDebtorIcon">
     <property name="visible">True</property>
@@ -375,7 +375,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
   </object>
-  <object class="GtkButton" id="deleteInvoicingBt">
+  <object class="GtkButton" id="deleteDirectDebitBt">
     <property name="label" translatable="yes">button</property>
     <property name="use_action_appearance">False</property>
     <property name="visible">True</property>
@@ -398,7 +398,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
   </object>
-  <object class="GtkImage" id="editInvoicingIcon">
+  <object class="GtkImage" id="editDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
@@ -408,7 +408,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
   </object>
-  <object class="GtkVBox" id="invoicingsVb">
+  <object class="GtkVBox" id="directDebitsVb">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="spacing">5</property>
@@ -425,7 +425,7 @@
             <property name="can_focus">False</property>
             <property name="spacing">10</property>
             <child>
-              <object class="GtkComboBox" id="invoicingsCb">
+              <object class="GtkComboBox" id="directDebitsCb">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="add_tearoffs">True</property>
@@ -443,14 +443,14 @@
                 <property name="spacing">10</property>
                 <property name="layout_style">start</property>
                 <child>
-                  <object class="GtkButton" id="cloneInvoicingBt">
+                  <object class="GtkButton" id="cloneDirectDebitBt">
                     <property name="label" translatable="yes">Clona la facturació</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">True</property>
                     <property name="use_action_appearance">False</property>
-                    <property name="image">newInvoicingIcon</property>
+                    <property name="image">newDirectDebitIcon</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -459,14 +459,14 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkToggleButton" id="editInvoicingTb">
+                  <object class="GtkToggleButton" id="editDirectDebitTb">
                     <property name="label" translatable="yes">Edita la facturació</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">True</property>
                     <property name="use_action_appearance">False</property>
-                    <property name="image">editInvoicingIcon</property>
+                    <property name="image">editDirectDebitIcon</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -475,14 +475,14 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton" id="printInvoicingBt">
+                  <object class="GtkButton" id="printDirectDebitBt">
                     <property name="label" translatable="yes">Genera fitxer i llistat</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">True</property>
                     <property name="use_action_appearance">False</property>
-                    <property name="image">printInvoicingIcon</property>
+                    <property name="image">printDirectDebitIcon</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -537,7 +537,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="invoicingDescriptionEn">
+                  <object class="GtkEntry" id="directDebitDescriptionEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="editable">False</property>
@@ -578,7 +578,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="invoicingEditionDateEn">
+                  <object class="GtkEntry" id="directDebitEditionDateEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="editable">False</property>
@@ -623,7 +623,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <child>
-                      <object class="GtkTreeView" id="debtorsInInvoicingTv">
+                      <object class="GtkTreeView" id="debtorsInDirectDebitTv">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child internal-child="selection">
@@ -643,7 +643,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <child>
-                      <object class="GtkTreeView" id="billingConceptsInInvoicingTv">
+                      <object class="GtkTreeView" id="billingConceptsInDirectDebitTv">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child internal-child="selection">
@@ -796,7 +796,7 @@
                             <property name="can_focus">False</property>
                             <property name="spacing">5</property>
                             <child>
-                              <object class="GtkEntry" id="invoicingBasePriceEn">
+                              <object class="GtkEntry" id="directDebitBasePriceEn">
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="editable">False</property>
@@ -839,7 +839,7 @@
                             <property name="can_focus">False</property>
                             <property name="spacing">5</property>
                             <child>
-                              <object class="GtkEntry" id="invoicingFinalPriceEn">
+                              <object class="GtkEntry" id="directDebitFinalPriceEn">
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="editable">False</property>
@@ -882,7 +882,7 @@
                             <property name="can_focus">False</property>
                             <property name="spacing">5</property>
                             <child>
-                              <object class="GtkEntry" id="invoicingNumberOfInvoicesEn">
+                              <object class="GtkEntry" id="directDebitNumberOfInvoicesEn">
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="editable">False</property>
@@ -963,20 +963,20 @@
         <property name="left_padding">5</property>
         <property name="right_padding">5</property>
         <child>
-          <object class="GtkHButtonBox" id="invoicingsHb">
+          <object class="GtkHButtonBox" id="directDebitsHb">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="spacing">10</property>
             <property name="layout_style">center</property>
             <child>
-              <object class="GtkButton" id="saveInvoicingBt">
+              <object class="GtkButton" id="saveDirectDebitBt">
                 <property name="label" translatable="yes">Desa la facturació</property>
                 <property name="use_action_appearance">False</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
                 <property name="use_action_appearance">False</property>
-                <property name="image">saveInvoicingIcon</property>
+                <property name="image">saveDirectDebitIcon</property>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -1044,7 +1044,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkToggleButton" id="invoicingsTb">
+                  <object class="GtkToggleButton" id="directDebitsTb">
                     <property name="label" translatable="yes">Facturacions</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -1702,12 +1702,12 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
   </object>
-  <object class="GtkImage" id="newInvoicingIcon">
+  <object class="GtkImage" id="newDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
   </object>
-  <object class="GtkToggleButton" id="newInvoicingTb">
+  <object class="GtkToggleButton" id="newDirectDebitTb">
     <property name="label" translatable="yes">Nova facturació</property>
     <property name="use_action_appearance">False</property>
     <property name="visible">True</property>
@@ -1720,7 +1720,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
   </object>
-  <object class="GtkImage" id="printInvoicingIcon">
+  <object class="GtkImage" id="printDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-print</property>
@@ -1740,7 +1740,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-save</property>
   </object>
-  <object class="GtkImage" id="saveInvoicingIcon">
+  <object class="GtkImage" id="saveDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-save</property>

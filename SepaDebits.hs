@@ -22,7 +22,7 @@ import           Sepa.MongoUtils
 
 main :: IO ()
 main = do
-  initGUI
+  _ <- initGUI
   builder <- builderNew
   builderAddFromFile builder "glade/SepaDebits.glade"
   mainWd <- builderGetObject builder castToWindow "mainWd"
@@ -38,10 +38,10 @@ type PanelDescr = (PanelId, (String, String))
 
 panels :: [PanelDescr]
 panels =
-    [ ("debtors",         ("debtorsTb",         "debtorsVb"         ))
-    , ("billingConcepts", ("billingConceptsTb", "billingConceptsVb"))
-    , ("invoicings",      ("invoicingsTb",      "invoicingsVb"     ))
-    ]
+  [ ("debtors",         ("debtorsTb",         "debtorsVb"        ))
+  , ("billingConcepts", ("billingConceptsTb", "billingConceptsVb"))
+  , ("directDebits",    ("directDebitsTb",    "directDebitsVb"   ))
+  ]
 
 mkGui :: Builder -> IO ()
 mkGui builder = do
