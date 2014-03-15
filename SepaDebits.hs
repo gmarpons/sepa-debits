@@ -28,7 +28,7 @@ main = do
   mainWd <- builderGetObject builder castToWindow "mainWd"
   mwExitBt <- builderGetObject builder castToButton "mwExitBt"
   on mwExitBt buttonActivated $ widgetDestroy mainWd >> mainQuit
-  -- onDestroy window mainQuit
+  on mainWd objectDestroy mainQuit
   mkGui builder
   widgetShowAll mainWd
   mainGUI
