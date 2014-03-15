@@ -18,6 +18,7 @@ import qualified Database.Persist.MongoDB    as DB
 import           Graphics.UI.Gtk
 import           Sepa.BillingConcept
 import           Sepa.MongoUtils
+--import qualified System.Glib.GObject         as G
 
 
 main :: IO ()
@@ -27,8 +28,8 @@ main = do
   builderAddFromFile builder "glade/SepaDebits.glade"
   mainWd <- builderGetObject builder castToWindow "mainWd"
   mwExitBt <- builderGetObject builder castToButton "mwExitBt"
-  on mwExitBt buttonActivated $ widgetDestroy mainWd >> mainQuit
-  on mainWd objectDestroy mainQuit
+  _ <- on mwExitBt buttonActivated $ widgetDestroy mainWd >> mainQuit
+  _ <- on mainWd objectDestroy mainQuit -- FIXME: don't exit if dirty state
   mkGui builder
   widgetShowAll mainWd
   mainGUI
@@ -45,120 +46,80 @@ panels =
 
 mkGui :: Builder -> IO ()
 mkGui builder = do
-  let panelIds = (fst . unzip) panels
+  -- Main panel widgets
+  let panelIds          = (fst . unzip)               panels
   let panelChooserNames = (fst . unzip . snd . unzip) panels
-  panelChoosers <- mapM (\n -> do w <- builderGetObject builder castToToggleButton n
-                                  widgetSetName w n
-                                  return w
-                        ) panelChooserNames
-  panelBoxes <- mapM (builderGetObject builder castToVBox)
-                $ (snd . unzip . snd . unzip) panels
+  let panelVBoxes       = (snd . unzip . snd . unzip) panels
+  panelChoosers <- forM panelChooserNames $ \name -> do
+    widget <- builderGetObject builder castToToggleButton name
+    widgetSetName widget name
+    return widget
+  panelBoxes <- mapM (builderGetObject builder castToVBox) panelVBoxes
   mainVb <- builderGetObject builder castToVBox "mainVb"
-  mapM_ (\chs -> on chs toggled $ do
-                   isActive <- toggleButtonGetActive chs
-                   when isActive $ do
-                     chsName <- widgetGetName chs
-                     putStrLn "toggled"
-                     children <- containerGetChildren mainVb
-                     let otherChs = filter (/= chs) panelChoosers
-                         oldBox = head children
-                         mbNewBox = lookup chsName
-                                    $ zip panelChooserNames panelBoxes
-                         (Just newBox) = mbNewBox
-                     set chs [widgetSensitive := False]
-                     mapM_ (\o -> set o [ toggleButtonActive := False
+  forM_ panelChoosers $ \chooser -> on chooser toggled $ do
+    isActive <- toggleButtonGetActive chooser
+    when isActive $ do
+      chooserName <- widgetGetName chooser
+      putStrLn "toggled"
+      (oldBox : _) <- containerGetChildren mainVb -- FIXME: unsafe pattern
+      let otherChoosers = filter (/= chooser) panelChoosers
+      let mbNewBox = lookup chooserName $ zip panelChooserNames panelBoxes
+      let (Just newBox) = mbNewBox
+      set chooser [widgetSensitive := False]
+      forM_ otherChoosers $ \o -> set o [ toggleButtonActive := False
                                         , widgetSensitive := True ]
-                           ) otherChs
-                     containerRemove mainVb oldBox
-                     boxPackStart mainVb newBox PackGrow 0
-        ) panelChoosers
-
-  -- Billing concepts widgets
-
-  billingConceptsTv <- builderGetObject builder castToTreeView "billingConceptsTv"
-  editBillingConceptTb
-      <- builderGetObject builder castToToggleButton "editBillingConceptTb"
-  newBillingConceptTb
-      <- builderGetObject builder castToToggleButton "newBillingConceptTb"
-  deleteBillingConceptBt
-      <- builderGetObject builder castToButton "deleteBillingConceptBt"
-  billingConceptDescriptionEn
-      <- builderGetObject builder castToEntry "billingConceptDescriptionEn"
-  billingConceptBasePriceEn
-      <- builderGetObject builder castToEntry "billingConceptBasePriceEn"
-  billingConceptVatRatioEn
-      <- builderGetObject builder castToEntry "billingConceptVatRatioEn"
-  billingConceptFinalPriceEn
-      <- builderGetObject builder castToEntry "billingConceptFinalPriceEn"
-  saveBillingConceptBt <- builderGetObject builder castToButton "saveBillingConceptBt"
-  cancelBillingConceptBt
-      <- builderGetObject builder castToButton "cancelBillingConceptBt"
-  billingConceptsSl <- treeViewGetSelection billingConceptsTv
-  treeSelectionSetMode billingConceptsSl SelectionSingle
-
-  -- Populate tree views
-
-  bcEL <- runDb $ DB.selectList ([] :: [DB.Filter BillingConcept]) []
-  let bcL = map DB.entityVal bcEL
-  putStrLn $ "Number of billing concepts: " ++ show (length bcL)
-  billingConceptsLs <- mkTreeViewColumnsAndModel billingConceptsTv Nothing
-                       [ ("Descripció (no es pot repetir)", T.unpack . (^. longName))
-                       , ("Etiqueta al rebut", T.unpack . (^. shortName))
-                       , ("Preu base", priceToStringSep "," . (^. basePrice))
-                       , ("% IVA", priceToStringSep "," . (^. vatRatio))
-                       , ("Preu final", priceToStringSep "," . (^. finalPrice))]
-  mapM_ (listStoreAppend billingConceptsLs) bcL
-
+      containerRemove mainVb oldBox
+      boxPackStart mainVb newBox PackGrow 0
+  -- Sub-panel widgets
+  mkBillingConceptsGui builder
   return ()
 
-
--- Helper functions
-
-mkTreeViewColumnsAndModel :: TreeView
-                -> Maybe (ListStore a)     -- ^ If @Nothing@, a new model is created.
-                -> [(String, a -> String)] -- ^ One function per pair (column, renderer),
-                                           -- as some columns can have more than one
-                                           -- renderer
-                -> IO (ListStore a)
-mkTreeViewColumnsAndModel view mModel titlesAndFuncs = do
-  -- Set tree model
-  model <- maybe (listStoreNew ([] :: [a])) return mModel
-  sortedModel <- treeModelSortNewWithModel model
-  treeViewSetModel view sortedModel
-
-  -- Set tree columns and cell renderers
-  mapM_ (\((title, func), sortColumnId) -> do
-            col <- treeViewColumnNew
-            treeViewColumnSetTitle col title
-            num <- treeViewAppendColumn view col
-            treeViewColumnSetSizing col (if num == length titlesAndFuncs
-                                           then TreeViewColumnFixed
-                                           else TreeViewColumnAutosize)
-            rd <- cellRendererTextNew
-            cellLayoutPackStart col rd (num /= length titlesAndFuncs)
-            treeViewColumnSetResizable col True
-
-            -- Render text in cells
-            let rendText = castToCellRendererText rd
-            cellLayoutSetAttributes col rendText model (\row -> [cellText := func row])
-            -- Sortable columns
-            treeViewColumnSetSortIndicator col True
-            let sortFunc xIter yIter = do
-                  xRow <- customStoreGetRow model xIter
-                  yRow <- customStoreGetRow model yIter
-                  return $ compare (func xRow) (func yRow)
-            treeSortableSetSortFunc sortedModel sortColumnId sortFunc
-            treeViewColumnSetSortColumnId col sortColumnId
-        ) $ zip titlesAndFuncs [0..]
-
-  -- Enable incremental search in TreeView
+mkBillingConceptsGui :: Builder -> IO ()
+mkBillingConceptsGui builder = do
+  billingConceptsTv <- builderGetObject builder castToTreeView "billingConceptsTv"
+  editBillingConceptTb <- builderGetObject builder castToToggleButton "editBillingConceptTb"
+  newBillingConceptTb  <- builderGetObject builder castToToggleButton "newBillingConceptTb"
+  deleteBillingConceptBt <- builderGetObject builder castToButton "deleteBillingConceptBt"
+  billingConceptDescriptionEn <- builderGetObject builder castToEntry "billingConceptDescriptionEn"
+  billingConceptBasePriceEn <- builderGetObject builder castToEntry "billingConceptBasePriceEn"
+  billingConceptVatRatioEn <- builderGetObject builder castToEntry "billingConceptVatRatioEn"
+  billingConceptFinalPriceEn <- builderGetObject builder castToEntry "billingConceptFinalPriceEn"
+  saveBillingConceptBt <- builderGetObject builder castToButton "saveBillingConceptBt"
+  cancelBillingConceptBt <- builderGetObject builder castToButton "cancelBillingConceptBt"
+  billingConceptsTm <- builderGetObject builder castToTreeModel "billingConceptsLs"
+  -- Populate tree view
+  billingConceptsEL <- runDb $ DB.selectList ([] :: [DB.Filter BillingConcept]) []
+  billingConceptsLs <- listStoreNew billingConceptsEL
+  billingConceptsSm <- treeModelSortNewWithModel billingConceptsLs
+  -- lsSize <- listStoreGetSize billingConceptsLs
+  -- putStrLn $ "Number of billing concepts: " ++ show lsSize
+  treeViewSetModel billingConceptsTv billingConceptsSm
+  billingConceptsCols <- treeViewGetColumns billingConceptsTv
+  let renderFuncs = [ T.unpack . (^. longName)  . DB.entityVal
+                    , T.unpack . (^. shortName) . DB.entityVal
+                    ]
+  -- forall columns: set renderer, set sorting func
+  forM_ (zip3 billingConceptsCols renderFuncs [0..]) $ \(col, renderFunc, colId) -> do
+    -- FIXME: column manual resizing doesn't work
+    let cellLayout = toCellLayout col
+    (cell : _) <- cellLayoutGetCells cellLayout    -- FIXME: unsafe pattern
+    let textRenderer = castToCellRendererText cell -- FIXME: unsafe cast
+    cellLayoutSetAttributes col textRenderer billingConceptsLs $ \row ->
+      [ cellText := renderFunc row ]
+    let sortFunc xIter yIter = do
+          xRow <- customStoreGetRow billingConceptsLs xIter
+          yRow <- customStoreGetRow billingConceptsLs yIter
+          return $ compare (renderFunc xRow) (renderFunc yRow)
+    treeSortableSetSortFunc billingConceptsSm colId sortFunc
+    treeViewColumnSetSortColumnId col colId
+  -- Incremental search in tree view
+  -- TODO: accent-independent search
   let equalFunc text iter = do
-        childIter <- treeModelSortConvertIterToChildIter sortedModel iter
-        row <- customStoreGetRow model childIter
-        let rowTexts = map ($ row) ((snd . unzip) titlesAndFuncs)
-        return $ text `isInfixOf` foldl (++) "" rowTexts
-  treeViewSetSearchEqualFunc view (Just equalFunc)
-  return model
+        childIter <- treeModelSortConvertIterToChildIter billingConceptsSm iter
+        row <- customStoreGetRow billingConceptsLs childIter
+        return $ text `isInfixOf` concatMap ($ row) renderFuncs
+  treeViewSetSearchEqualFunc billingConceptsTv (Just equalFunc)
+  return ()
 
 priceToStringSep :: String -> Int -> String
 priceToStringSep separator = T.unpack . T.replace "." (T.pack separator) . priceToText

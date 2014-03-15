@@ -11,6 +11,14 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-add</property>
   </object>
+  <object class="GtkListStore" id="billingConceptsLs">
+    <columns>
+      <!-- column-name longName -->
+      <column type="gchararray"/>
+      <!-- column-name shortName -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
   <object class="GtkImage" id="cancelBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -35,9 +43,37 @@
               <object class="GtkTreeView" id="billingConceptsTv">
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
+                <property name="vscroll_policy">natural</property>
                 <property name="reorderable">True</property>
+                <property name="rules_hint">True</property>
                 <child internal-child="selection">
                   <object class="GtkTreeSelection" id="treeview-selection2"/>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="billingConceptsTvC1">
+                    <property name="resizable">True</property>
+                    <property name="sizing">autosize</property>
+                    <property name="title" translatable="yes">Descripció (no es pot repetir)</property>
+                    <property name="clickable">True</property>
+                    <property name="sort_indicator">True</property>
+                    <property name="sort_column_id">0</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="cellrenderertext1"/>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkTreeViewColumn" id="billingConceptsTvC2">
+                    <property name="resizable">True</property>
+                    <property name="sizing">fixed</property>
+                    <property name="title" translatable="yes">Etiqueta al rebut</property>
+                    <property name="clickable">True</property>
+                    <property name="sort_indicator">True</property>
+                    <property name="sort_column_id">0</property>
+                    <child>
+                      <object class="GtkCellRendererText" id="cellrenderertext2"/>
+                    </child>
+                  </object>
                 </child>
               </object>
             </child>
@@ -346,6 +382,11 @@
       </packing>
     </child>
   </object>
+  <object class="GtkImage" id="cancelDebtorIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-cancel</property>
+  </object>
   <object class="GtkImage" id="cancelDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -360,17 +401,12 @@
     <property name="use_action_appearance">False</property>
     <property name="image">cancelDirectDebitIcon</property>
   </object>
-  <object class="GtkImage" id="cancelDebtorIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-cancel</property>
-  </object>
   <object class="GtkImage" id="deleteBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
   </object>
-  <object class="GtkImage" id="deleteIm">
+  <object class="GtkImage" id="deleteDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
@@ -383,30 +419,10 @@
     <property name="receives_default">True</property>
     <property name="use_action_appearance">False</property>
   </object>
-  <object class="GtkImage" id="deleteDebtorIcon">
+  <object class="GtkImage" id="deleteIm">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
-  </object>
-  <object class="GtkImage" id="editBillingConceptIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-edit</property>
-  </object>
-  <object class="GtkImage" id="editIm">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-edit</property>
-  </object>
-  <object class="GtkImage" id="editDirectDebitIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-edit</property>
-  </object>
-  <object class="GtkImage" id="editDebtorIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-edit</property>
   </object>
   <object class="GtkVBox" id="directDebitsVb">
     <property name="visible">True</property>
@@ -993,6 +1009,26 @@
         <property name="position">2</property>
       </packing>
     </child>
+  </object>
+  <object class="GtkImage" id="editBillingConceptIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-edit</property>
+  </object>
+  <object class="GtkImage" id="editDebtorIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-edit</property>
+  </object>
+  <object class="GtkImage" id="editDirectDebitIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-edit</property>
+  </object>
+  <object class="GtkImage" id="editIm">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-edit</property>
   </object>
   <object class="GtkWindow" id="mainWd">
     <property name="can_focus">False</property>
@@ -1697,7 +1733,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
   </object>
-  <object class="GtkImage" id="newIm">
+  <object class="GtkImage" id="newDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
@@ -1715,7 +1751,7 @@
     <property name="receives_default">True</property>
     <property name="use_action_appearance">False</property>
   </object>
-  <object class="GtkImage" id="newDebtorIcon">
+  <object class="GtkImage" id="newIm">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
@@ -1740,12 +1776,12 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-save</property>
   </object>
-  <object class="GtkImage" id="saveDirectDebitIcon">
+  <object class="GtkImage" id="saveDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-save</property>
   </object>
-  <object class="GtkImage" id="saveDebtorIcon">
+  <object class="GtkImage" id="saveDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-save</property>
