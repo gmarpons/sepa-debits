@@ -6,19 +6,6 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-add</property>
   </object>
-  <object class="GtkImage" id="addIm">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-add</property>
-  </object>
-  <object class="GtkListStore" id="billingConceptsLs">
-    <columns>
-      <!-- column-name longName -->
-      <column type="gchararray"/>
-      <!-- column-name shortName -->
-      <column type="gchararray"/>
-    </columns>
-  </object>
   <object class="GtkImage" id="cancelBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -452,12 +439,12 @@
     <property name="use_action_appearance">False</property>
     <property name="image">cancelDirectDebitIcon</property>
   </object>
-  <object class="GtkImage" id="deleteBillingConceptIcon">
+  <object class="GtkImage" id="deleteDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
   </object>
-  <object class="GtkImage" id="deleteDebtorIcon">
+  <object class="GtkImage" id="deleteBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
@@ -1080,6 +1067,11 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
+  </object>
+  <object class="GtkImage" id="printDirectDebitIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-print</property>
   </object>
   <object class="GtkImage" id="newBillingConceptIcon">
     <property name="visible">True</property>
@@ -1806,11 +1798,6 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
-  </object>
-  <object class="GtkImage" id="printDirectDebitIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-print</property>
   </object>
   <object class="GtkImage" id="removeChargeIcon">
     <property name="visible">True</property>
