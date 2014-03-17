@@ -95,3 +95,4 @@ executable sepa-debits
   other-extensions:     NoImplicitPrelude,
                         TemplateHaskell
   ghc-options:          -threaded
+                        -ddump-splices

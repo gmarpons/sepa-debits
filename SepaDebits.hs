@@ -1,3 +1,4 @@
+{-# LANGUAGE ExistentialQuantification    #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -7,43 +8,40 @@ module Main
        ( main
        ) where
 
-import           Control.Lens             hiding (set, view)
+import           Control.Lens                hiding (set, view)
 import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Control
+import           Control.Monad.Trans.Reader
 import           Data.IORef
 import           Data.List
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Reader
-import qualified Data.Text                as T (pack, replace, unpack)
-import qualified Data.Text.Lazy           as TL (unpack)
-import qualified Data.Time.Clock          as C (NominalDiffTime)
-import qualified Database.Persist.MongoDB as DB
-import           Formatting               hiding (builder)
+import qualified Data.Text                   as T (pack, replace, unpack)
+import qualified Data.Text.Lazy              as TL (unpack)
+import qualified Data.Time.Clock             as C (NominalDiffTime)
+import qualified Database.Persist.MongoDB    as DB
+import           Formatting                  hiding (builder)
 import           Graphics.UI.Gtk
-import qualified Network                  as N (PortID (PortNumber))
+import qualified Network                     as N (PortID (PortNumber))
 import           Sepa.BillingConcept
-import qualified System.Glib.GObject      as G
+import qualified System.Glib.GObject         as G
 
-type PanelId = String
-type PanelDescr = (PanelId, (String, String))
-
-panels :: [PanelDescr]
-panels =
-  [ ("debtors",         ("debtorsTb",         "debtorsVb"        ))
-  , ("billingConcepts", ("billingConceptsTb", "billingConceptsVb"))
-  , ("directDebits",    ("directDebitsTb",    "directDebitsVb"   ))
-  ]
-
-data AppState
-  = AppState
-    { _guiSt   :: GuiState
-    , _builder :: Builder
+-- | I assume that the elements in this record have their own state (e.g. through IORef's
+-- or MVar's), so they can be used in callbacks.
+data AppData
+  = AppData
+    { _builder :: Builder
     , _db      :: DB.ConnectionPool
     }
 
-data GuiState
-  = View { _panelId :: PanelId, _panelSt :: PanelState }
-  | Edit { _panelId :: PanelId, _panelSt :: PanelState }
-  deriving Show
+makeLenses ''AppData
+
+type PanelId = String
+
+data MainWindowState
+  = View { _choosedPanelId :: PanelId }
+  | Edit { _choosedPanelId :: PanelId }
+
+makeLenses ''MainWindowState
 
 data PanelState
   = NoSel
@@ -52,16 +50,38 @@ data PanelState
   | EditOld { _item :: TreeIter, _isValid :: Bool }
   deriving Show
 
-makeLenses ''AppState
-makeLenses ''GuiState
 makeLenses ''PanelState
 
-type App = ReaderT (IORef AppState) IO
+-- | Meant to be used as class @HasPanelController@, generated with TH.
+data PanelController =
+  PanelController
+  { _panelId :: PanelId
+  , _panel   :: IO VBox
+  , _chooser :: IO ToggleButton
+  }
 
-askAppSt :: App AppState
-askAppSt = do
-  appStRef <- ask
-  liftIO $ readIORef appStRef
+makeClassy ''PanelController
+
+data BillingConceptsController = BC PanelId Builder
+
+makeLenses ''BillingConceptsController
+
+data BoxedPanelController = forall a. HasPanelController a => MkBoxedPanelController a
+
+instance HasPanelController BoxedPanelController where
+  panelController =
+    lens
+    (\(MkBoxedPanelController b) -> b ^. panelController)
+    const                       -- We're not interested in mutating panel controllers
+
+instance HasPanelController BillingConceptsController where
+  panelController =
+    lens
+    (\(BC panelId_ builder_) -> PanelController {
+        _panelId = panelId_,
+        _panel   = builderGetObject builder_ castToVBox         (panelId_ ++ "_Vb"),
+        _chooser = builderGetObject builder_ castToToggleButton (panelId_ ++ "_Tb") })
+    const                       -- We're not interested in mutating panel controllers
 
 main :: IO ()
 main = do
@@ -69,9 +89,8 @@ main = do
   db_ <- DB.createMongoDBPool dbName hostName port Nothing poolSize stripeSize time
   builder_ <- builderNew
   builderAddFromFile builder_ gladeFile
-  let initialAppState = AppState (View "billingConcepts" NoSel) builder_ db_
-  appStRef <- newIORef initialAppState
-  mainWd <- runReaderT mkGui appStRef
+  let appData = AppData builder_ db_
+  mainWd <- mkMainWindowGui appData
   widgetShowAll mainWd
   mainGUI
     where
@@ -81,56 +100,85 @@ main = do
       port       = N.PortNumber 27017 :: N.PortID -- Standard MongoDB port
       poolSize   = 10                             -- Num. of stripes
       stripeSize = 10                             -- Num. of connections per stripe
-      time       = 5 :: C.NominalDiffTime         -- Seconds
+      time       = 60 :: C.NominalDiffTime        -- Seconds
 
-mkGui :: App Window
-mkGui = do
-  st <- askAppSt
-  let bldr = st ^. builder
+mkMainWindowGui :: AppData -> IO Window
+mkMainWindowGui appData = do
+  let controllers   = [ MkBoxedPanelController (BC "BC" (appData ^. builder))
+                      ]                            :: [BoxedPanelController]
+  choosers          <- sequence $ controllers ^.. traversed . chooser :: IO [ToggleButton]
+  panels            <- sequence $ controllers ^.. traversed . panel   :: IO [VBox]
+  let panelsAL      = zip choosers panels
 
-  -- Main window widgets
+  -- Get main window widgets from Glade builder
 
-  let panelIds          = (fst . unzip)               panels
-  let panelChooserNames = (fst . unzip . snd . unzip) panels
-  let panelVBoxes       = (snd . unzip . snd . unzip) panels
-  mainWd <- liftIO $ builderGetObject bldr castToWindow "mainWd"
-  mwExitBt <- liftIO $ builderGetObject bldr castToButton "mwExitBt"
-  _ <- liftIO $ on mwExitBt buttonActivated $ widgetDestroy mainWd >> mainQuit
-  _ <- liftIO $ on mainWd objectDestroy mainQuit -- FIXME: don't exit if dirty state
-  panelChoosers <- forM panelChooserNames $ \name -> do
-    widget <- liftIO $ builderGetObject bldr castToToggleButton name
-    liftIO $ widgetSetName widget name
-    return widget
-  panelBoxes <- mapM (liftIO . builderGetObject bldr castToVBox) panelVBoxes
-  mainVb <- liftIO $ builderGetObject bldr castToVBox "mainVb"
-  forM_ panelChoosers $ \chooser -> liftIO $ on chooser toggled $ do
-    isActive <- liftIO $ toggleButtonGetActive chooser
+  mainWd            <- builderGetObject (appData ^. builder) castToWindow "mainWd"
+  mwExitBt          <- builderGetObject (appData ^. builder) castToButton "mwExitBt"
+  mainVb            <- builderGetObject (appData ^. builder) castToVBox   "mainVb"
+
+  -- Main window initial state
+
+  -- FIXME: partial func 'head'
+  stRef <- newIORef (View (head controllers ^. panelId)) :: IO (IORef MainWindowState)
+
+  -- Auxiliary functions
+
+  -- FIXME: partial func 'head'. Have a look at 'firstOf' funcion in Lens.Fold
+  let chooserFromId panelId_ =
+        head $ controllers ^.. folded . filtered (\y -> y ^. panelId == panelId_) . chooser
+
+  let setState :: MainWindowState -> IO ()
+      setState (View i) = do -- st <- readIORef stRef
+                             set mwExitBt [ widgetSensitive := True ]
+                             putStrLn "Befor chooserFromId"
+                             chs <- chooserFromId i
+                             putStrLn "After chooserFromId"
+                             let otherChoosers = filter (/= chs) choosers
+                             mapM_ (`set` [ widgetSensitive := True ]) otherChoosers
+                             writeIORef stRef (View i)
+                             putStrLn $ "View " ++ i
+      setState (Edit i) = do -- st <- readIORef stRef
+                             set mwExitBt [ widgetSensitive := False ]
+                             chs <- chooserFromId i
+                             let otherChoosers = filter (/= chs) choosers
+                             mapM_ (`set` [ widgetSensitive := False ]) otherChoosers
+                             writeIORef stRef (Edit i)
+                             putStrLn $ "Edit " ++ i
+
+  -- Connect signals
+
+  _ <- on mwExitBt buttonActivated $ widgetDestroy mainWd >> mainQuit
+
+  _ <- on mainWd objectDestroy mainQuit -- FIXME: don't exit if dirty state
+
+  forM_ choosers $ \chs -> on chs toggled $ do
+    -- If button can be toggled then it was active, and its panel selected
+    isActive <- toggleButtonGetActive chs
     when isActive $ do
-      chooserName <- liftIO $ widgetGetName chooser
-      liftIO $ putStrLn "toggled"
-      (oldBox : _) <- liftIO $ containerGetChildren mainVb -- FIXME: unsafe pattern
-      let otherChoosers = filter (/= chooser) panelChoosers
-      let mbNewBox = lookup chooserName $ zip panelChooserNames panelBoxes
-      let (Just newBox) = mbNewBox
-      liftIO $ set chooser [widgetSensitive := False]
-      forM_ otherChoosers $ \o -> liftIO $ set o [ toggleButtonActive := False
-                                                 , widgetSensitive := True ]
-      liftIO $ containerRemove mainVb oldBox
-      liftIO $ boxPackStart mainVb newBox PackGrow 0
+      set chs [ widgetSensitive := False ]
+      let otherChoosers = filter (/= chs) choosers
+      forM_ otherChoosers $ flip set [ toggleButtonActive := False
+                                     , widgetSensitive := True ]
+      (oldVBox : _) <- containerGetChildren mainVb      -- FIXME: unsafe pattern
+      let (Just newVBox) = lookup chs panelsAL          -- FIXME: unsafe pattern
+      containerRemove mainVb oldVBox
+      boxPackStart mainVb newVBox PackGrow 0
 
-  -- Sub-panel widgets
+  -- Return
 
-  mkBillingConceptsGui
+  st <- readIORef stRef
+  setState st
+
+  mkBillingConceptsGui appData
   return mainWd
 
-mkBillingConceptsGui :: App ()
-mkBillingConceptsGui = do
-  st <- askAppSt
+mkBillingConceptsGui :: AppData -> IO ()
+mkBillingConceptsGui ad = do
 
   -- Populate tree view
 
-  billingConceptsTv <- liftIO $ builderGetObject (st ^. builder) castToTreeView "billingConceptsTv"
-  billingConceptsEL <- flip DB.runMongoDBPoolDef (st ^. db) $
+  billingConceptsTv <- liftIO $ builderGetObject (ad ^. builder) castToTreeView "billingConceptsTv"
+  billingConceptsEL <- flip DB.runMongoDBPoolDef (ad ^. db) $
                        DB.selectList ([] :: [DB.Filter BillingConcept]) []
   -- Setting tree view models from glade doesn't work: stablish connection here and we can
   -- use treeViewGet* functions afterwards.
@@ -172,6 +220,30 @@ mkBillingConceptsGui = do
         row <- liftIO $ customStoreGetRow billingConceptsLs childIter
         return $ any (\f -> text_ `isInfixOf` f row) renderFuncs
   liftIO $ treeViewSetSearchEqualFunc billingConceptsTv (Just equalFunc)
+
+  -- Connect selector
+
+  let treeView = billingConceptsTv
+  modelSort <- liftIO $ treeViewGetSortedModel treeView
+  selection <- liftIO $ treeViewGetSelection treeView
+  let toChildIter = treeModelSortConvertIterToChildIter modelSort
+  -- let onSelectionChangedAction = do
+  --                     count <- treeSelectionCountSelectedRows selection
+  --                     if count == 0
+  --                       then setState NoSel adRef stRef gui panelId
+  --                       else treeSelectionSelectedForeach selection $ \it ->
+  --                                do cIt <- toChildIter it
+  --                                   -- row <- treeModelGetRow model cIt
+  --                                   setState (Sel cIt) adRef stRef gui panelId
+  liftIO $ on selection treeSelectionSelectionChanged $ do
+    count <- liftIO $ treeSelectionCountSelectedRows selection
+    if count == 0
+      then return ()
+      else liftIO $ treeSelectionSelectedForeach selection $ \it -> do
+        cIt <- toChildIter it
+        return ()
+  -- on (cancelBt gui) buttonActivated $ onSelectionChangedAction
+
   return ()
 
 -- | Possibly unsafe operation. Error if @view@ doesn't have a TreeModelSort model.
