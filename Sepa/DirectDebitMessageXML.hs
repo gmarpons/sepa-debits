@@ -1,10 +1,8 @@
-{-# LANGUAGE
-  FlexibleInstances,
-  GADTs,
-  NoImplicitPrelude,
-  OverloadedStrings,
-  TypeFamilies
-  #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Sepa.DirectDebitMessageXML
        ( writeMessageToFile,
@@ -12,27 +10,24 @@ module Sepa.DirectDebitMessageXML
        ) where
 
 import           ClassyPrelude
-import qualified Codec.Text.IConv                                               as IC
+import qualified Codec.Text.IConv          as IC
 import           Control.Lens
-import qualified Data.List                                                      as L
-  (genericDrop)
-import qualified Data.Map                                                       as M
-import qualified Data.Text.Lazy                                                 as LT
-  (Text)
-import qualified Data.Text.Lazy.Encoding                                        as LT
-import qualified Data.Time.Calendar                                             as T
-import qualified Data.Time.Calendar.Easter                                      as T
-import qualified Data.Time.LocalTime                                            as T
+import qualified Data.List                 as L (genericDrop)
+import qualified Data.Map                  as M
+import qualified Data.Text.Lazy            as LT (Text)
+import qualified Data.Text.Lazy.Encoding   as LT
+import qualified Data.Time.Calendar        as T
+import qualified Data.Time.Calendar.Easter as T
+import qualified Data.Time.LocalTime       as T
 import           Sepa.BillingConcept
 import           Sepa.Creditor
 import           Sepa.Debtor
 import           Sepa.DirectDebit
 import           Sepa.SpanishIban
-import qualified Text.Printf                                                    as PF
- (printf)
-import           Text.XML               hiding (writeFile)
-import qualified Text.XML.Light.Input                                           as LXML
-import qualified Text.XML.Light.Output                                          as LXML
+import qualified Text.Printf               as PF (printf)
+import           Text.XML                  hiding (writeFile)
+import qualified Text.XML.Light.Input      as LXML
+import qualified Text.XML.Light.Output     as LXML
 
 
 -- Type synonims
@@ -139,7 +134,7 @@ pmtTpInf areNew = nodeElem "PmtTpInf" subnodes
 svcLvl :: Node                                                        -- +++
 svcLvl = nodeElem "SvcLvl" [cd "SEPA"]
 
-cd :: Text -> Node                                                        -- ++++
+cd :: Text -> Node                                                    -- ++++
 cd = nodeContent "Cd"
 
 lclInstrm :: Node                                                     -- +++
@@ -189,7 +184,7 @@ cdtrSchmeId :: Creditor -> Node                                       -- ++
 cdtrSchmeId c = nodeElem "CdtrSchmeId" [id_cred_init c]
 
 -- Identifies both the creditor and the initiating party
-id_cred_init :: Creditor -> Node                                           -- +++
+id_cred_init :: Creditor -> Node                                      -- +++
 id_cred_init c = nodeElem "Id" [prvtId c]
 
 prvtId :: Creditor -> Node                                            -- ++++
