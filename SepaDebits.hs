@@ -1,35 +1,35 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TemplateHaskell           #-}
+{-# LANGUAGE TypeFamilies              #-}
 
---{-# LANGUAGE MultiParamTypeClasses           #-}
---{-# LANGUAGE FunctionalDependencies           #-}
---{-# LANGUAGE FlexibleInstances           #-}
---{-# LANGUAGE UndecidableInstances           #-}
+--{-# LANGUAGE FlexibleInstances         #-}
+--{-# LANGUAGE UndecidableInstances      #-}
 
 module Main
        ( main
        ) where
 
-import           Control.Lens                hiding (set, view)
+import           Control.Lens             hiding (set, view)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
 import           Data.List
-import qualified Data.Text                   as T (pack, replace, unpack)
-import qualified Data.Text.Lazy              as TL (unpack)
-import qualified Data.Time.Clock             as C (NominalDiffTime)
-import qualified Database.Persist.MongoDB    as DB
-import           Formatting                  hiding (builder)
+import qualified Data.Text                as T (pack, replace, unpack)
+import qualified Data.Text.Lazy           as TL (unpack)
+import qualified Data.Time.Clock          as C (NominalDiffTime)
+import qualified Database.Persist.MongoDB as DB
+import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
-import qualified Network                     as N (PortID (PortNumber))
+import qualified Network                  as N (PortID (PortNumber))
 import           Sepa.BillingConcept
-import qualified System.Glib.GObject         as G
+import qualified System.Glib.GObject      as G
 
--- | I assume that the elements in this record have their own state (e.g. through IORef's
--- or MVar's), so they can be used in callbacks.
+-- -- | I assume that the elements in this record have their own state (e.g. through IORef's
+-- -- or MVar's), so they can be used in callbacks.
 -- data AppData
 --   = AppData
 --     { _builder :: Builder
@@ -55,30 +55,6 @@ data PanelState
 
 makeLenses ''PanelState
 
--- | Meant to be used as class @HasPanelController@, generated with TH.
-data PanelController =
-  PanelController
-  { _panelId            :: PanelId
-  , _panel              :: IO VBox
-  , _chooser            :: IO ToggleButton
-  , _newTb              :: IO ToggleButton
-  , _editTb             :: IO ToggleButton
-  , _deleteBt           :: IO Button
-  , _saveBt             :: IO Button
-  , _cancelBt           :: IO Button
-  , _setModel           :: DB.ConnectionPool -> IO ()
-  }
-
-makeClassy ''PanelController
-
-data BoxedPanelController = forall a . HasPanelController a => MkBoxedPanelController a
-
-instance HasPanelController BoxedPanelController where
-  panelController =
-    lens
-    (\(MkBoxedPanelController b) -> b ^. panelController)
-    const                       -- We're not interested in mutating panel controllers
-
 main :: IO ()
 main = do
   _ <- initGUI
@@ -97,30 +73,101 @@ main = do
       stripeSize = 10                             -- Num. of connections per stripe
       time       = 60 :: C.NominalDiffTime        -- Seconds
 
-mkMainWindowGui :: Builder -> DB.ConnectionPool  -> IO Window
-mkMainWindowGui builder db = do
-  let controllers   = [ MkBoxedPanelController (BC "BC" builder)
-                      ] :: [BoxedPanelController]
-  choosers          <- sequence $ controllers ^.. traversed . chooser :: IO [ToggleButton]
-  panels            <- sequence $ controllers ^.. traversed . panel   :: IO [VBox]
+-- | Generic panel controllor (useful for debtors panel, billing concepts panel, etc.).
+-- Parametrized (through associated types) with an entity type and a selector (e.g.
+-- TreeView) type.
+class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
+      Controller c where
+  -- | Type of elements shown in the panel.
+  type E c
+
+  -- | type of the selector widget (e.g. TreeView or ComboBox).
+  type S c
+
+  -- All instances need to implement the following functions
+  panelId  :: c -> PanelId -- ^ Instances need to implement this.
+  builder  :: c -> Builder -- ^ Instances need to implement this.
+  selector :: c -> IO (S c)
+  setModel :: (TreeModelClass m) => S c -> m -> IO ()
+
+  -- The following functions have a generally applicable default implementation. Some of
+  -- them ar based on conventions for Glade names.
+  panel    :: c -> IO VBox
+  chooser  :: c -> IO ToggleButton
+  newTb    :: c -> IO ToggleButton
+  editTb   :: c -> IO ToggleButton
+  deleteBt :: c -> IO Button
+  saveBt   :: c -> IO Button
+  cancelBt :: c -> IO Button
+  entities :: c -> DB.ConnectionPool -> IO [DB.Entity (E c)]
+  runGui   :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
+  panel    c    = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
+  chooser  c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_Tb")
+  newTb    c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_newTb")
+  editTb   c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_editTb")
+  deleteBt c    = builderGetObject (builder c) castToButton       (panelId c ++ "_deleteBt")
+  saveBt   c    = builderGetObject (builder c) castToButton       (panelId c ++ "_saveBt")
+  cancelBt c    = builderGetObject (builder c) castToButton       (panelId c ++ "_cancelBt")
+  entities _ db = flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter (E c)]) []
+  runGui        = mkPanelGui    -- Implemented as a top-level function
+
+-- | Box for heterogeneous collections of @Controller@'s.
+data BController where
+  MkBController :: Controller c => c -> BController
+
+-- TODO: if I could only declare the following instance ...
+-- instance Controller BController where
+--   panelId  (MkBController c) = panelId c
+--   builder  (MkBController c) = builder c
+--   selector (MkBController c) = selector c
+
+bPanelId :: BController -> PanelId
+bBuilder :: BController -> Builder
+bChooser :: BController -> IO ToggleButton
+bPanel   :: BController -> IO VBox
+bRunGui  :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> BController -> IO ()
+bPanelId  (MkBController c) = panelId  c
+bBuilder  (MkBController c) = builder  c
+bChooser  (MkBController c) = chooser  c
+bPanel    (MkBController c) = panel    c
+bRunGui   db f (MkBController c) = runGui db f c
+
+data BillingConceptsController = BC PanelId Builder
+
+instance Controller BillingConceptsController where
+  type E BillingConceptsController = BillingConcept
+  type S BillingConceptsController = TreeView
+  builder (BC _ builder_) = builder_
+  panelId (BC panelId_ _) = panelId_
+  selector c = builderGetObject (builder c) castToTreeView (panelId c ++ "_Tv")
+  setModel = treeViewSetModel
+
+mkMainWindowGui :: Builder -> DB.ConnectionPool -> IO Window
+mkMainWindowGui builder_ db = do
+
+  -- Create panel controllers and helper lists
+
+  let controllers   = [ MkBController (BC "BC" builder_)
+                      ] :: [BController]
+  choosers          <- mapM bChooser controllers :: IO [ToggleButton]
+  panels            <- mapM bPanel controllers :: IO [VBox]
   let panelsAL      = zip choosers panels
 
   -- Get main window widgets from Glade builder
 
-  mainWd            <- builderGetObject builder castToWindow "mainWd"
-  mwExitBt          <- builderGetObject builder castToButton "mwExitBt"
-  mainVb            <- builderGetObject builder castToVBox   "mainVb"
+  mainWd            <- builderGetObject builder_ castToWindow "mainWd"
+  mwExitBt          <- builderGetObject builder_ castToButton "mwExitBt"
+  mainVb            <- builderGetObject builder_ castToVBox   "mainVb"
 
   -- Place main window initial state in an IORef
 
   -- FIXME: partial func 'head'
-  stRef <- newIORef (View (head controllers ^. panelId)) :: IO (IORef MainWindowState)
+  stRef <- newIORef (View (bPanelId (head controllers))) :: IO (IORef MainWindowState)
 
   -- Auxiliary functions
 
-  -- FIXME: partial func 'head'. Have a look at 'firstOf' funcion in Lens.Fold
-  let chooserFromId panelId_ =
-        head $ controllers ^.. folded . filtered (\y -> y ^. panelId == panelId_) . chooser
+  -- FIXME: partial func 'head'
+  let chooserFromId panelId_ = bChooser $ head $ filter ((== panelId_) . bPanelId) controllers
 
   let setState :: MainWindowState -> IO ()
       setState (View i) = do -- st <- readIORef stRef
@@ -162,50 +209,46 @@ mkMainWindowGui builder db = do
   st <- readIORef stRef
   setState st
 
-  --mkBillingConceptsGui appData setState
-  mapM_ (mkPanelGui db setState) controllers
+  -- Create Gui for all panels, and return
+
+  mapM_ (bRunGui db setState) controllers
   return mainWd
 
-panelControllerDef :: PanelId -> Builder -> PanelController
-panelControllerDef panelId_ builder_ = PanelController {
-  _panel    = builderGetObject builder_ castToVBox         (panelId_ ++ "_Vb"),
-  _chooser  = builderGetObject builder_ castToToggleButton (panelId_ ++ "_Tb"),
-  _newTb    = builderGetObject builder_ castToToggleButton (panelId_ ++ "_newTb"),
-  _editTb   = builderGetObject builder_ castToToggleButton (panelId_ ++ "_editTb"),
-  _deleteBt = builderGetObject builder_ castToButton       (panelId_ ++ "_deleteBt"),
-  _saveBt   = builderGetObject builder_ castToButton       (panelId_ ++ "_saveBt"),
-  _cancelBt = builderGetObject builder_ castToButton       (panelId_ ++ "_cancelBt"),
-  _setModel = \_ -> putStrLn "def",
-  _panelId  = panelId_
-  }
+  -- panelController =
+  --   -- We're not interested in mutating panel controllers
+  --   lens
+  --   ( \(BC panelId_ builder) -> (panelControllerDef panelId_ builder) {
+  --        _setModel = \db -> do
+  --           putStrLn "bc"
+  --           view <- builderGetObject builder castToTreeView (panelId_ ++ "_Tv")
+  --           entities <- flip DB.runMongoDBPoolDef db $
+  --                       DB.selectList ([] :: [DB.Filter BillingConcept]) []
+  --           print $ length entities
+  --           -- Setting tree view models from glade doesn't work: stablish connection here and we can
+  --           -- use treeViewGet* functions afterwards.
+  --           -- billingConceptsLs <- treeViewGetListStore billingConceptsTv
+  --           -- mapM_ (listStoreAppend billingConceptsLs) billingConceptsEL
+  --           listStore   <- listStoreNew entities
+  --           sortedModel <- treeModelSortNewWithModel listStore
+  --           treeViewSetModel view sortedModel
+  --        } )
+  --   const
 
-data BillingConceptsController = BC PanelId Builder
-
-instance HasPanelController BillingConceptsController where
-  panelController =
-    -- We're not interested in mutating panel controllers
-    lens
-    ( \(BC panelId_ builder) -> (panelControllerDef panelId_ builder) {
-         _setModel = \db -> do
-            putStrLn "bc"
-            view <- builderGetObject builder castToTreeView (panelId_ ++ "_Tv")
-            entities <- flip DB.runMongoDBPoolDef db $
-                        DB.selectList ([] :: [DB.Filter BillingConcept]) []
-            print $ length entities
-            -- Setting tree view models from glade doesn't work: stablish connection here and we can
-            -- use treeViewGet* functions afterwards.
-            -- billingConceptsLs <- treeViewGetListStore billingConceptsTv
-            -- mapM_ (listStoreAppend billingConceptsLs) billingConceptsEL
-            listStore   <- listStoreNew entities
-            sortedModel <- treeModelSortNewWithModel listStore
-            treeViewSetModel view sortedModel
-         } )
-    const
-
-mkPanelGui :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> BoxedPanelController -> IO ()
+mkPanelGui :: (Controller c,
+               DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
+              DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
 mkPanelGui db setMainWindowState c = do
 
-  c ^. setModel $ db            -- FIXME: an IO action with getter syntax? DIRTY
+  selector_ <- selector c
+  entities_ <- entities c db
+  -- Setting tree view models from glade doesn't work: stablish connection here and we can
+  -- use treeViewGet* functions afterwards.
+  -- billingConceptsLs <- treeViewGetListStore billingConceptsTv
+  -- mapM_ (listStoreAppend billingConceptsLs) billingConceptsEL
+  listStore   <- listStoreNew entities_
+  sortedModel <- treeModelSortNewWithModel listStore
+  setModel selector_ sortedModel
+  -- treeViewSetModel view_ sortedModel
 
   let renderFuncs = [ T.unpack      . (^. longName)   . DB.entityVal
                     , T.unpack      . (^. shortName)  . DB.entityVal
@@ -262,7 +305,6 @@ mkPanelGui db setMainWindowState c = do
   --       cIt <- toChildIter it
   --       return ()
   -- -- on (cancelBt gui) buttonActivated $ onSelectionChangedAction
-
   return ()
 
 -- | Possibly unsafe operation. Error if @view@ doesn't have a TreeModelSort model.
