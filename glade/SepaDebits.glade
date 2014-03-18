@@ -17,7 +17,7 @@
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <child>
-              <object class="GtkTreeView" id="billingConceptsTv">
+              <object class="GtkTreeView" id="BC_Tv">
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="vscroll_policy">natural</property>
@@ -133,7 +133,7 @@
                     <property name="spacing">10</property>
                     <property name="layout_style">start</property>
                     <child>
-                      <object class="GtkToggleButton" id="editBillingConceptTb">
+                      <object class="GtkToggleButton" id="BC_editTb">
                         <property name="label" translatable="yes">Modifica el concepte</property>
                         <property name="use_action_appearance">False</property>
                         <property name="visible">True</property>
@@ -149,7 +149,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkToggleButton" id="newBillingConceptTb">
+                      <object class="GtkToggleButton" id="BC_newTb">
                         <property name="label" translatable="yes">Afegeix un nou concepte</property>
                         <property name="use_action_appearance">False</property>
                         <property name="visible">True</property>
@@ -172,7 +172,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton" id="deleteBillingConceptBt">
+                  <object class="GtkButton" id="BC_deleteBt">
                     <property name="label" translatable="yes">Elimina el concepte</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -205,7 +205,7 @@
                 <property name="column_spacing">5</property>
                 <property name="row_spacing">5</property>
                 <child>
-                  <object class="GtkEntry" id="billingConceptBasePriceEn">
+                  <object class="GtkEntry" id="BC_BasePriceEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="max_length">11</property>
@@ -219,7 +219,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="billingConceptFinalPriceEn">
+                  <object class="GtkEntry" id="BC_FinalPriceEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="editable">False</property>
@@ -273,7 +273,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="billingConceptDescriptionEn">
+                  <object class="GtkEntry" id="BC_DescriptionEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="max_length">70</property>
@@ -304,7 +304,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkEntry" id="billingConceptVatRatioEn">
+                      <object class="GtkEntry" id="BC_VatRatioEn">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="max_length">11</property>
@@ -355,7 +355,7 @@
                 <property name="spacing">10</property>
                 <property name="layout_style">center</property>
                 <child>
-                  <object class="GtkButton" id="saveBillingConceptBt">
+                  <object class="GtkButton" id="BC_saveBt">
                     <property name="label" translatable="yes">Desa el concepte</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -371,7 +371,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton" id="cancelBillingConceptBt">
+                  <object class="GtkButton" id="BC_cancelBt">
                     <property name="label" translatable="yes">Cancel·la els canvis</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -427,7 +427,7 @@
             <property name="can_focus">False</property>
             <property name="spacing">10</property>
             <child>
-              <object class="GtkComboBox" id="directDebitsCb">
+              <object class="GtkComboBox" id="DD_Cb">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="add_tearoffs">True</property>
@@ -445,7 +445,7 @@
                 <property name="spacing">10</property>
                 <property name="layout_style">start</property>
                 <child>
-                  <object class="GtkButton" id="cloneDirectDebitBt">
+                  <object class="GtkButton" id="DD_cloneBt">
                     <property name="label" translatable="yes">Clona la facturació</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -461,7 +461,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkToggleButton" id="editDirectDebitTb">
+                  <object class="GtkToggleButton" id="DD_editTb">
                     <property name="label" translatable="yes">Edita la facturació</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -477,7 +477,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton" id="printDirectDebitBt">
+                  <object class="GtkButton" id="DD_printBt">
                     <property name="label" translatable="yes">Genera fitxer i llistat</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
@@ -539,7 +539,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="directDebitDescriptionEn">
+                  <object class="GtkEntry" id="DD_descriptionEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="editable">False</property>
@@ -580,7 +580,7 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="directDebitEditionDateEn">
+                  <object class="GtkEntry" id="DD_editionDateEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="editable">False</property>
@@ -625,7 +625,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <child>
-                      <object class="GtkTreeView" id="debtorsInDirectDebitTv">
+                      <object class="GtkTreeView" id="DD_debtorsTv">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child internal-child="selection">
@@ -645,7 +645,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <child>
-                      <object class="GtkTreeView" id="billingConceptsInDirectDebitTv">
+                      <object class="GtkTreeView" id="DD_billingConceptsTv">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child internal-child="selection">
@@ -679,7 +679,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkEntry" id="chargeActualBasePriceEn">
+                      <object class="GtkEntry" id="DD_actualBasePriceEn">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <property name="invisible_char">●</property>
@@ -691,7 +691,7 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkButton" id="addChargeBt">
+                      <object class="GtkButton" id="DD_addItemBt">
                         <property name="label" translatable="yes">Afegir càrrec</property>
                         <property name="use_action_appearance">False</property>
                         <property name="visible">True</property>
@@ -734,7 +734,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <child>
-                      <object class="GtkTreeView" id="chargesTv">
+                      <object class="GtkTreeView" id="DD_itemsTv">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child internal-child="selection">
@@ -758,7 +758,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <child>
-                          <object class="GtkButton" id="deleteChargeBt">
+                          <object class="GtkButton" id="DD_deleteItemBt">
                             <property name="label" translatable="yes">Eliminar càrrec</property>
                             <property name="use_action_appearance">False</property>
                             <property name="visible">True</property>
@@ -798,7 +798,7 @@
                             <property name="can_focus">False</property>
                             <property name="spacing">5</property>
                             <child>
-                              <object class="GtkEntry" id="directDebitBasePriceEn">
+                              <object class="GtkEntry" id="DD_basePriceEn">
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="editable">False</property>
@@ -841,7 +841,7 @@
                             <property name="can_focus">False</property>
                             <property name="spacing">5</property>
                             <child>
-                              <object class="GtkEntry" id="directDebitFinalPriceEn">
+                              <object class="GtkEntry" id="DD_finalPriceEn">
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="editable">False</property>
@@ -884,7 +884,7 @@
                             <property name="can_focus">False</property>
                             <property name="spacing">5</property>
                             <child>
-                              <object class="GtkEntry" id="directDebitNumberOfInvoicesEn">
+                              <object class="GtkEntry" id="DD_numberOfDebitsEn">
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="editable">False</property>
@@ -971,7 +971,7 @@
             <property name="spacing">10</property>
             <property name="layout_style">center</property>
             <child>
-              <object class="GtkButton" id="saveDirectDebitBt">
+              <object class="GtkButton" id="DD_saveBt">
                 <property name="label" translatable="yes">Desa la facturació</property>
                 <property name="use_action_appearance">False</property>
                 <property name="visible">True</property>
@@ -996,6 +996,31 @@
       </packing>
     </child>
   </object>
+  <object class="GtkButton" id="DD_cancelBt">
+    <property name="label" translatable="yes">Cancel·la els canvis</property>
+    <property name="use_action_appearance">False</property>
+    <property name="visible">True</property>
+    <property name="can_focus">True</property>
+    <property name="receives_default">True</property>
+    <property name="use_action_appearance">False</property>
+    <property name="image">cancelDirectDebitIcon</property>
+  </object>
+  <object class="GtkButton" id="DD_deleteBt">
+    <property name="label" translatable="yes">button</property>
+    <property name="use_action_appearance">False</property>
+    <property name="visible">True</property>
+    <property name="can_focus">True</property>
+    <property name="receives_default">True</property>
+    <property name="use_action_appearance">False</property>
+  </object>
+  <object class="GtkToggleButton" id="DD_newTb">
+    <property name="label" translatable="yes">Nova facturació</property>
+    <property name="use_action_appearance">False</property>
+    <property name="visible">True</property>
+    <property name="can_focus">True</property>
+    <property name="receives_default">True</property>
+    <property name="use_action_appearance">False</property>
+  </object>
   <object class="GtkImage" id="addChargeIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -1016,15 +1041,6 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-cancel</property>
   </object>
-  <object class="GtkButton" id="cancelDirectDebitBt">
-    <property name="label" translatable="yes">Cancel·la els canvis</property>
-    <property name="use_action_appearance">False</property>
-    <property name="visible">True</property>
-    <property name="can_focus">True</property>
-    <property name="receives_default">True</property>
-    <property name="use_action_appearance">False</property>
-    <property name="image">cancelDirectDebitIcon</property>
-  </object>
   <object class="GtkImage" id="deleteBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -1034,14 +1050,6 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-delete</property>
-  </object>
-  <object class="GtkButton" id="deleteDirectDebitBt">
-    <property name="label" translatable="yes">button</property>
-    <property name="use_action_appearance">False</property>
-    <property name="visible">True</property>
-    <property name="can_focus">True</property>
-    <property name="receives_default">True</property>
-    <property name="use_action_appearance">False</property>
   </object>
   <object class="GtkImage" id="deleteIm">
     <property name="visible">True</property>
@@ -1068,10 +1076,10 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
   </object>
-  <object class="GtkImage" id="printDirectDebitIcon">
+  <object class="GtkImage" id="newDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
-    <property name="stock">gtk-print</property>
+    <property name="stock">gtk-new</property>
   </object>
   <object class="GtkWindow" id="mainWd">
     <property name="can_focus">False</property>
@@ -1174,7 +1182,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
                         <child>
-                          <object class="GtkTreeView" id="debtorsTv">
+                          <object class="GtkTreeView" id="DE_Tv">
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="reorderable">True</property>
@@ -1211,7 +1219,7 @@
                                 <property name="spacing">10</property>
                                 <property name="layout_style">start</property>
                                 <child>
-                                  <object class="GtkToggleButton" id="editDebtorTb">
+                                  <object class="GtkToggleButton" id="DE_editTb">
                                     <property name="label" translatable="yes">Modifica l'alumne</property>
                                     <property name="use_action_appearance">False</property>
                                     <property name="visible">True</property>
@@ -1227,7 +1235,7 @@
                                   </packing>
                                 </child>
                                 <child>
-                                  <object class="GtkToggleButton" id="newDebtorTb">
+                                  <object class="GtkToggleButton" id="DE_newTb">
                                     <property name="label" translatable="yes">Afegeix un nou alumne</property>
                                     <property name="use_action_appearance">False</property>
                                     <property name="visible">True</property>
@@ -1250,7 +1258,7 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkButton" id="deleteDebtorBt">
+                              <object class="GtkButton" id="DE_deleteBt">
                                 <property name="label" translatable="yes">Elimina l'alumne</property>
                                 <property name="use_action_appearance">False</property>
                                 <property name="visible">True</property>
@@ -1296,7 +1304,7 @@
                                   </packing>
                                 </child>
                                 <child>
-                                  <object class="GtkEntry" id="personNameFirstEn">
+                                  <object class="GtkEntry" id="DE_personNameFirstEn">
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="max_length">100</property>
@@ -1323,7 +1331,7 @@
                                   </packing>
                                 </child>
                                 <child>
-                                  <object class="GtkEntry" id="personNameLastEn">
+                                  <object class="GtkEntry" id="DE_personNameLastEn">
                                     <property name="visible">True</property>
                                     <property name="can_focus">True</property>
                                     <property name="max_length">200</property>
@@ -1390,7 +1398,7 @@
                                                       </packing>
                                                     </child>
                                                     <child>
-                                                      <object class="GtkEntry" id="bankAccountBankIdEn">
+                                                      <object class="GtkEntry" id="DE_bankAccountBankIdEn">
                                                         <property name="visible">True</property>
                                                         <property name="can_focus">True</property>
                                                         <property name="max_length">4</property>
@@ -1441,7 +1449,7 @@
                                                       </packing>
                                                     </child>
                                                     <child>
-                                                      <object class="GtkEntry" id="bankAccountOfficeEn">
+                                                      <object class="GtkEntry" id="DE_bankAccountOfficeEn">
                                                         <property name="visible">True</property>
                                                         <property name="can_focus">True</property>
                                                         <property name="max_length">4</property>
@@ -1492,7 +1500,7 @@
                                                       </packing>
                                                     </child>
                                                     <child>
-                                                      <object class="GtkEntry" id="bankAccountControlDigitsEn">
+                                                      <object class="GtkEntry" id="DE_bankAccountControlDigitsEn">
                                                         <property name="visible">True</property>
                                                         <property name="can_focus">True</property>
                                                         <property name="max_length">2</property>
@@ -1543,7 +1551,7 @@
                                                       </packing>
                                                     </child>
                                                     <child>
-                                                      <object class="GtkEntry" id="bankAccountNumEn">
+                                                      <object class="GtkEntry" id="DE_bankAccountNumEn">
                                                         <property name="visible">True</property>
                                                         <property name="can_focus">True</property>
                                                         <property name="max_length">10</property>
@@ -1599,7 +1607,7 @@
                                             <property name="visible">True</property>
                                             <property name="can_focus">False</property>
                                             <child>
-                                              <object class="GtkButton" id="oldBankAccountsBt">
+                                              <object class="GtkButton" id="DE_oldBt">
                                                 <property name="label" translatable="yes">Comptes antics</property>
                                                 <property name="use_action_appearance">False</property>
                                                 <property name="visible">True</property>
@@ -1658,7 +1666,7 @@
                             <property name="spacing">10</property>
                             <property name="layout_style">center</property>
                             <child>
-                              <object class="GtkButton" id="saveDebtorBt">
+                              <object class="GtkButton" id="DE_saveBt">
                                 <property name="label" translatable="yes">Desa l'alumne</property>
                                 <property name="use_action_appearance">False</property>
                                 <property name="visible">True</property>
@@ -1674,7 +1682,7 @@
                               </packing>
                             </child>
                             <child>
-                              <object class="GtkButton" id="cancelDebtorBt">
+                              <object class="GtkButton" id="DE_cancelBt">
                                 <property name="label" translatable="yes">Cancel·la els canvis</property>
                                 <property name="use_action_appearance">False</property>
                                 <property name="visible">True</property>
@@ -1776,28 +1784,20 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
   </object>
-  <object class="GtkImage" id="newDebtorIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
-  </object>
   <object class="GtkImage" id="newDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
   </object>
-  <object class="GtkToggleButton" id="newDirectDebitTb">
-    <property name="label" translatable="yes">Nova facturació</property>
-    <property name="use_action_appearance">False</property>
-    <property name="visible">True</property>
-    <property name="can_focus">True</property>
-    <property name="receives_default">True</property>
-    <property name="use_action_appearance">False</property>
-  </object>
   <object class="GtkImage" id="newIm">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
+  </object>
+  <object class="GtkImage" id="printDirectDebitIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-print</property>
   </object>
   <object class="GtkImage" id="removeChargeIcon">
     <property name="visible">True</property>
