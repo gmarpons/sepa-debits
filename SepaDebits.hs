@@ -6,8 +6,9 @@
 {-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE TypeFamilies              #-}
 
---{-# LANGUAGE FlexibleInstances         #-}
 --{-# LANGUAGE UndecidableInstances      #-}
+--{-# LANGUAGE MultiParamTypeClasses         #-}
+--{-# LANGUAGE FlexibleInstances         #-}
 
 module Main
        ( main
@@ -73,34 +74,58 @@ main = do
       stripeSize = 10                             -- Num. of connections per stripe
       time       = 60 :: C.NominalDiffTime        -- Seconds
 
--- | Generic panel controllor (useful for debtors panel, billing concepts panel, etc.).
--- Parametrized (through associated types) with an entity type and a selector (e.g.
--- TreeView) type.
+type PS c = DB.Entity (E c)     -- ^ Used to simplify type signatures in Controller.
+
+type LS c = ListStore (PS c)    -- ^ Used to simplify type signatures in Controller.
+
+-- | Generic panel controller, used to factorize implementation of debtors, billing
+-- concepts and direct debits panels (an VBox with all its contained widgets). It's main
+-- entry point is template method @mkController@. In general, functions in this class are
+-- non-pure, as they use state stored by Gtk in the IO monad. The class is parametrized
+-- (through associated types) with an entity type and a @selector@ (e.g. TreeView) type.
 class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
       Controller c where
-  -- | Type of elements shown in the panel.
+
+  -- | Type of elements shown in the panel (e.g Debtor).
   type E c
 
-  -- | type of the selector widget (e.g. TreeView or ComboBox).
+  -- | Type of the selector widget (e.g. TreeView or ComboBox).
   type S c
 
-  -- All instances need to implement the following functions
-  panelId  :: c -> PanelId -- ^ Instances need to implement this.
-  builder  :: c -> Builder -- ^ Instances need to implement this.
-  selector :: c -> IO (S c)
-  setModel :: (TreeModelClass m) => S c -> m -> IO ()
+  -- All instances need to implement, at least, the following functions
+  panelId              :: c -> PanelId -- ^ Instances need to implement this.
+  builder              :: c -> Builder -- ^ Instances need to implement this.
+  selector             ::                                        c -> IO (S c)
+  setSelectorModel     :: (TreeModelClass m) =>     S c -> m  -> c -> IO ()
+
+  -- The following functions may be re-implemented, default instance implementation does
+  -- nothing
+  setSelectorRenderers ::                           S c -> LS c       -> c -> IO ()
+  setSelectorSorting   :: (TreeSortableClass sm) => S c -> LS c -> sm -> c -> IO ()
 
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
-  panel    :: c -> IO VBox
-  chooser  :: c -> IO ToggleButton
-  newTb    :: c -> IO ToggleButton
-  editTb   :: c -> IO ToggleButton
-  deleteBt :: c -> IO Button
-  saveBt   :: c -> IO Button
-  cancelBt :: c -> IO Button
-  entities :: c -> DB.ConnectionPool -> IO [DB.Entity (E c)]
-  runGui   :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
+  panel                ::                                        c -> IO VBox
+  chooser              ::                                        c -> IO ToggleButton
+  newTb                ::                                        c -> IO ToggleButton
+  editTb               ::                                        c -> IO ToggleButton
+  deleteBt             ::                                        c -> IO Button
+  saveBt               ::                                        c -> IO Button
+  cancelBt             ::                                        c -> IO Button
+  entities             :: DB.ConnectionPool                   -> c -> IO [PS c]
+
+  -- The following are lists of functions.
+  renderers            ::                                        c -> [PS c -> String]
+
+  -- | A Template Method pattern (it is implemented once for all instances) that
+  -- initializes all the panel widgets, including connection with persistent model and
+  -- callback events. All the other functions in this class are here only to be called by
+  -- @mkController@, except @panelId@, @panel@ and @chooser@.
+  mkController         :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
+
+  -- Default implementations for some functions
+  setSelectorRenderers _ _ _   = return ()
+  setSelectorSorting   _ _ _ _ = return ()
   panel    c    = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
   chooser  c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_Tb")
   newTb    c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_newTb")
@@ -108,8 +133,9 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   deleteBt c    = builderGetObject (builder c) castToButton       (panelId c ++ "_deleteBt")
   saveBt   c    = builderGetObject (builder c) castToButton       (panelId c ++ "_saveBt")
   cancelBt c    = builderGetObject (builder c) castToButton       (panelId c ++ "_cancelBt")
-  entities _ db = flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter (E c)]) []
-  runGui        = mkPanelGui    -- Implemented as a top-level function
+  entities db _ = flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter (E c)]) []
+  renderers _   = []
+  mkController  = mkPanelGui    -- Implemented as a top-level function
 
 -- | Box for heterogeneous collections of @Controller@'s.
 data BController where
@@ -121,26 +147,66 @@ data BController where
 --   builder  (MkBController c) = builder c
 --   selector (MkBController c) = selector c
 
-bPanelId :: BController -> PanelId
-bBuilder :: BController -> Builder
-bChooser :: BController -> IO ToggleButton
-bPanel   :: BController -> IO VBox
-bRunGui  :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> BController -> IO ()
-bPanelId  (MkBController c) = panelId  c
-bBuilder  (MkBController c) = builder  c
-bChooser  (MkBController c) = chooser  c
-bPanel    (MkBController c) = panel    c
-bRunGui   db f (MkBController c) = runGui db f c
+bPanelId      :: BController -> PanelId
+bBuilder      :: BController -> Builder
+bChooser      :: BController -> IO ToggleButton
+bPanel        :: BController -> IO VBox
+bMkController :: BController -> DB.ConnectionPool -> (MainWindowState -> IO ()) -> IO ()
+bPanelId      (MkBController c)      = panelId           c
+bBuilder      (MkBController c)      = builder           c
+bChooser      (MkBController c)      = chooser           c
+bPanel        (MkBController c)      = panel             c
+bMkController (MkBController c) db f = mkController db f c
 
 data BillingConceptsController = BC PanelId Builder
 
 instance Controller BillingConceptsController where
   type E BillingConceptsController = BillingConcept
   type S BillingConceptsController = TreeView
-  builder (BC _ builder_) = builder_
-  panelId (BC panelId_ _) = panelId_
-  selector c = builderGetObject (builder c) castToTreeView (panelId c ++ "_Tv")
-  setModel = treeViewSetModel
+  builder  (BC _        builder_) = builder_
+  panelId  (BC panelId_ _       ) = panelId_
+  selector (BC panelId_ builder_) =
+    builderGetObject builder_ castToTreeView (panelId_ ++ "_Tv")
+  setSelectorModel s m   _ = treeViewSetModel s m
+  setSelectorRenderers s ls    c = setTreeViewRenderers s ls    (renderers c) c
+  setSelectorSorting   s ls sm c = setTreeViewSorting   s ls sm (renderers c) orderings c
+    where orderings = repeat compare -- TODO: catalan collation
+  renderers _ = [ T.unpack      . (^. longName)   . DB.entityVal
+                , T.unpack      . (^. shortName)  . DB.entityVal
+                , priceToString . (^. basePrice)  . DB.entityVal
+                , priceToString . (^. vatRatio)   . DB.entityVal
+                , priceToString . (^. finalPrice) . DB.entityVal
+                ]
+
+setTreeViewRenderers :: Controller c => TreeView -> LS c -> [PS c -> String] -> c -> IO ()
+setTreeViewRenderers treeView listStore renderFuncs _ = do
+  -- forall columns: set renderer, set sorting func
+  columns <- treeViewGetColumns treeView
+  forM_ (zip columns renderFuncs) $ \(col, renderFunc) -> do
+    -- FIXME: column manual resizing doesn't work
+    let cellLayout = toCellLayout col
+    (cell : _) <- cellLayoutGetCells cellLayout    -- FIXME: unsafe pattern, dep. on glade
+    let textRenderer = castToCellRendererText cell -- FIXME: unsafe cast, depends on glade
+    cellLayoutSetAttributes col textRenderer listStore $ \row -> [ cellText := renderFunc row ]
+
+setTreeViewSorting :: (Controller c, TreeSortableClass sm) =>
+                      TreeView
+                   -> LS c
+                   -> sm
+                   -> [PS c-> String]
+                   -> [String -> String -> Ordering]
+                   -> c
+                   -> IO ()
+setTreeViewSorting treeView listStore sortedModel renderFuncs orderings _ = do
+  -- forall columns: set renderer, set sorting func
+  columns <- treeViewGetColumns treeView
+  forM_ (zip4 columns renderFuncs orderings [0..]) $ \(col, renderFunc, ordering, colId) -> do
+    let sortFunc xIter yIter = do
+          xRow <- customStoreGetRow listStore xIter
+          yRow <- customStoreGetRow listStore yIter
+          return $ ordering (renderFunc xRow) (renderFunc yRow)
+    treeSortableSetSortFunc sortedModel colId sortFunc
+    treeViewColumnSetSortColumnId col colId
 
 mkMainWindowGui :: Builder -> DB.ConnectionPool -> IO Window
 mkMainWindowGui builder_ db = do
@@ -150,7 +216,7 @@ mkMainWindowGui builder_ db = do
   let controllers   = [ MkBController (BC "BC" builder_)
                       ] :: [BController]
   choosers          <- mapM bChooser controllers :: IO [ToggleButton]
-  panels            <- mapM bPanel controllers :: IO [VBox]
+  panels            <- mapM bPanel controllers   :: IO [VBox]
   let panelsAL      = zip choosers panels
 
   -- Get main window widgets from Glade builder
@@ -211,68 +277,26 @@ mkMainWindowGui builder_ db = do
 
   -- Create Gui for all panels, and return
 
-  mapM_ (bRunGui db setState) controllers
+  mapM_ (\bc -> bMkController bc db setState) controllers
   return mainWd
-
-  -- panelController =
-  --   -- We're not interested in mutating panel controllers
-  --   lens
-  --   ( \(BC panelId_ builder) -> (panelControllerDef panelId_ builder) {
-  --        _setModel = \db -> do
-  --           putStrLn "bc"
-  --           view <- builderGetObject builder castToTreeView (panelId_ ++ "_Tv")
-  --           entities <- flip DB.runMongoDBPoolDef db $
-  --                       DB.selectList ([] :: [DB.Filter BillingConcept]) []
-  --           print $ length entities
-  --           -- Setting tree view models from glade doesn't work: stablish connection here and we can
-  --           -- use treeViewGet* functions afterwards.
-  --           -- billingConceptsLs <- treeViewGetListStore billingConceptsTv
-  --           -- mapM_ (listStoreAppend billingConceptsLs) billingConceptsEL
-  --           listStore   <- listStoreNew entities
-  --           sortedModel <- treeModelSortNewWithModel listStore
-  --           treeViewSetModel view sortedModel
-  --        } )
-  --   const
 
 mkPanelGui :: (Controller c,
                DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
               DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
 mkPanelGui db setMainWindowState c = do
 
-  selector_ <- selector c
-  entities_ <- entities c db
   -- Setting tree view models from glade doesn't work: stablish connection here and we can
   -- use treeViewGet* functions afterwards.
-  -- billingConceptsLs <- treeViewGetListStore billingConceptsTv
-  -- mapM_ (listStoreAppend billingConceptsLs) billingConceptsEL
-  listStore   <- listStoreNew entities_
-  sortedModel <- treeModelSortNewWithModel listStore
-  setModel selector_ sortedModel
-  -- treeViewSetModel view_ sortedModel
+  -- Tried: billingConceptsLs <- treeViewGetListStore billingConceptsTv
+  --        mapM_ (listStoreAppend billingConceptsLs) billingConceptsEL
 
-  let renderFuncs = [ T.unpack      . (^. longName)   . DB.entityVal
-                    , T.unpack      . (^. shortName)  . DB.entityVal
-                    , priceToString . (^. basePrice)  . DB.entityVal
-                    , priceToString . (^. vatRatio)   . DB.entityVal
-                    , priceToString . (^. finalPrice) . DB.entityVal
-                    ]
-
-  -- forall columns: set renderer, set sorting func
-
-  -- billingConceptsCols <- treeViewGetColumns billingConceptsTv
-  -- forM_ (zip3 billingConceptsCols renderFuncs [0..]) $ \(col, renderFunc, colId) -> do
-  --   -- FIXME: column manual resizing doesn't work
-  --   let cellLayout = toCellLayout col
-  --   (cell : _) <- liftIO $ cellLayoutGetCells cellLayout    -- FIXME: unsafe pattern, dep. on glade
-  --   let textRenderer = castToCellRendererText cell          -- FIXME: unsafe cast, depends on glade
-  --   liftIO $ cellLayoutSetAttributes col textRenderer billingConceptsLs $ \row ->
-  --     [ cellText := renderFunc row ]
-  --   let sortFunc xIter yIter = do
-  --         xRow <- liftIO $ customStoreGetRow billingConceptsLs xIter
-  --         yRow <- liftIO $ customStoreGetRow billingConceptsLs yIter
-  --         return $ compare (renderFunc xRow) (renderFunc yRow)
-  --   liftIO $ treeSortableSetSortFunc billingConceptsSm colId sortFunc
-  --   liftIO $ treeViewColumnSetSortColumnId col colId
+  s  <- selector c
+  e  <- entities db c
+  ls <- listStoreNew e
+  sm <- treeModelSortNewWithModel ls
+  setSelectorModel     s sm    c
+  setSelectorRenderers s ls    c
+  setSelectorSorting   s ls sm c
 
   -- -- Incremental search in tree view
 
@@ -306,24 +330,6 @@ mkPanelGui db setMainWindowState c = do
   --       return ()
   -- -- on (cancelBt gui) buttonActivated $ onSelectionChangedAction
   return ()
-
--- | Possibly unsafe operation. Error if @view@ doesn't have a TreeModelSort model.
-treeViewGetSortedModel :: forall a . TreeView -> IO (TypedTreeModelSort a)
-treeViewGetSortedModel view = do
-  (Just uncastedTreeModelSort) <- treeViewGetModel view
-  let treeModelSort = (G.unsafeCastGObject . toGObject) uncastedTreeModelSort
-                      :: TypedTreeModelSort a
-  return treeModelSort
-
--- | Possibly unsafe operation. Error if @view@ doesn't have a ListStore model.
-treeViewGetListStore :: forall a . TreeView -> IO (ListStore a)
-treeViewGetListStore view = do
-  (Just uncastedTreeModelSort) <- treeViewGetModel view
-  let treeModelSort = (G.unsafeCastGObject . toGObject) uncastedTreeModelSort
-                      :: TypedTreeModelSort a
-  uncastedListStore <- treeModelSortGetModel treeModelSort
-  let listStore = (G.unsafeCastGObject . toGObject) uncastedListStore
-  return listStore
 
 priceToString :: Int -> String
 priceToString num = TL.unpack $ format (left padding ' ') (toText num)
