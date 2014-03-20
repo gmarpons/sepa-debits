@@ -96,6 +96,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   builder              :: c -> Builder -- ^ Instances need to implement this.
   selector             ::                                                 c -> IO (S c)
   setSelectorModel     :: (TreeModelClass m)      => S c         -> m  -> c -> IO ()
+  connectSelector      :: (TreeModelSortClass sm) => S c         -> sm -> () -> c -> IO ()
 
   -- The following functions may be re-implemented, default instance implementation does
   -- nothing
@@ -180,6 +181,7 @@ instance Controller BillingConceptsController where
                 , priceToString . (^. vatRatio)   . DB.entityVal
                 , priceToString . (^. finalPrice) . DB.entityVal
                 ]
+  connectSelector s sm f c = connectTreeView s sm f c
 
 data DebtorsController = DE PanelId Builder
 
@@ -199,6 +201,7 @@ instance Controller DebtorsController where
   renderers _ = [ T.unpack      . (^. lastName)   . DB.entityVal
                 , T.unpack      . (^. firstName)  . DB.entityVal
                 ]
+  connectSelector s sm f c = connectTreeView s sm f c
 
 setTreeViewRenderers :: Controller c => TreeView -> LS c -> [PS c -> String] -> c -> IO ()
 setTreeViewRenderers treeView listStore renderFuncs _ = do
@@ -248,6 +251,32 @@ setTreeViewSearching treeView listStore sortedModel renderFuncs isPartOf _ = do
         -- return $ any (\f -> text_ `isInfixOf` f row) renderFuncs
         return $ txt `isPartOf` map ($ row) renderFuncs
   treeViewSetSearchEqualFunc treeView (Just rowEqualFunc)
+
+connectTreeView :: (Controller c, TreeModelSortClass sm) =>
+                   TreeView
+                   -> sm
+                   -> ()
+                   -> c
+                   -> IO ()
+connectTreeView treeView sortedModel _ c = do
+  selection <- treeViewGetSelection treeView
+  let toChildIter = treeModelSortConvertIterToChildIter sortedModel
+  let onSelectionChangedAction = do
+        count <- treeSelectionCountSelectedRows selection
+        if count == 0
+          then {- setState NoSel adRef stRef gui panelId -}
+            print "NoSel"
+          else treeSelectionSelectedForeach selection $ \it -> do
+            cIt <- toChildIter it
+            {- setState (Sel cIt) adRef stRef gui panelId -}
+            print cIt
+
+  on selection treeSelectionSelectionChanged $ onSelectionChangedAction
+
+  cancelBt_ <- cancelBt c
+  on cancelBt_ buttonActivated $ onSelectionChangedAction
+  return ()
+
 
 mkMainWindowGui :: Builder -> DB.ConnectionPool -> IO Window
 mkMainWindowGui builder_ db = do
@@ -335,33 +364,13 @@ mkPanelGui db setMainWindowState c = do
   e  <- entities db c
   ls <- listStoreNew e
   sm <- treeModelSortNewWithModel ls
-  setSelectorModel     s sm    c
-  setSelectorRenderers s ls    c
-  setSelectorSorting   s ls sm c
-  setSelectorSearching s ls sm c
+  setSelectorModel     s sm             c
+  setSelectorRenderers s ls             c
+  setSelectorSorting   s ls sm          c
+  setSelectorSearching s ls sm          c
+--  connectSelector      s    sm setState c
+  connectSelector      s    sm () c
 
-  -- -- Connect selector
-
-  -- let treeView = billingConceptsTv
-  -- modelSort <- liftIO $ treeViewGetSortedModel treeView
-  -- selection <- liftIO $ treeViewGetSelection treeView
-  -- let toChildIter = treeModelSortConvertIterToChildIter modelSort
-  -- -- let onSelectionChangedAction = do
-  -- --                     count <- treeSelectionCountSelectedRows selection
-  -- --                     if count == 0
-  -- --                       then setState NoSel adRef stRef gui panelId
-  -- --                       else treeSelectionSelectedForeach selection $ \it ->
-  -- --                                do cIt <- toChildIter it
-  -- --                                   -- row <- treeModelGetRow model cIt
-  -- --                                   setState (Sel cIt) adRef stRef gui panelId
-  -- liftIO $ on selection treeSelectionSelectionChanged $ do
-  --   count <- liftIO $ treeSelectionCountSelectedRows selection
-  --   if count == 0
-  --     then return ()
-  --     else liftIO $ treeSelectionSelectedForeach selection $ \it -> do
-  --       cIt <- toChildIter it
-  --       return ()
-  -- -- on (cancelBt gui) buttonActivated $ onSelectionChangedAction
   return ()
 
 priceToString :: Int -> String
