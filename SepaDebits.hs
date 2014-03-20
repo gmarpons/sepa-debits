@@ -16,7 +16,6 @@ module Main
 
 import           Control.Lens             hiding (set, view)
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Data.IORef
 import           Data.List
 import qualified Data.Text                as T (pack, replace, unpack)
@@ -27,7 +26,6 @@ import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import qualified Network                  as N (PortID (PortNumber))
 import           Sepa.BillingConcept
-import qualified System.Glib.GObject      as G
 
 -- -- | I assume that the elements in this record have their own state (e.g. through IORef's
 -- -- or MVar's), so they can be used in callbacks.
@@ -95,13 +93,14 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   -- All instances need to implement, at least, the following functions
   panelId              :: c -> PanelId -- ^ Instances need to implement this.
   builder              :: c -> Builder -- ^ Instances need to implement this.
-  selector             ::                                        c -> IO (S c)
-  setSelectorModel     :: (TreeModelClass m) =>     S c -> m  -> c -> IO ()
+  selector             ::                                                 c -> IO (S c)
+  setSelectorModel     :: (TreeModelClass m)      => S c         -> m  -> c -> IO ()
 
   -- The following functions may be re-implemented, default instance implementation does
   -- nothing
-  setSelectorRenderers ::                           S c -> LS c       -> c -> IO ()
-  setSelectorSorting   :: (TreeSortableClass sm) => S c -> LS c -> sm -> c -> IO ()
+  setSelectorRenderers ::                            S c -> LS c       -> c -> IO ()
+  setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm -> c -> IO ()
+  setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm -> c -> IO ()
 
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
@@ -126,6 +125,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   -- Default implementations for some functions
   setSelectorRenderers _ _ _   = return ()
   setSelectorSorting   _ _ _ _ = return ()
+  setSelectorSearching _ _ _ _ = return ()
   panel    c    = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
   chooser  c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_Tb")
   newTb    c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_newTb")
@@ -171,6 +171,8 @@ instance Controller BillingConceptsController where
   setSelectorRenderers s ls    c = setTreeViewRenderers s ls    (renderers c) c
   setSelectorSorting   s ls sm c = setTreeViewSorting   s ls sm (renderers c) orderings c
     where orderings = repeat compare -- TODO: catalan collation
+  setSelectorSearching s ls sm c = setTreeViewSearching s ls sm (renderers c) isPartOf c
+    where tx `isPartOf` txs = any (tx `isInfixOf`) txs
   renderers _ = [ T.unpack      . (^. longName)   . DB.entityVal
                 , T.unpack      . (^. shortName)  . DB.entityVal
                 , priceToString . (^. basePrice)  . DB.entityVal
@@ -198,7 +200,6 @@ setTreeViewSorting :: (Controller c, TreeSortableClass sm) =>
                    -> c
                    -> IO ()
 setTreeViewSorting treeView listStore sortedModel renderFuncs orderings _ = do
-  -- forall columns: set renderer, set sorting func
   columns <- treeViewGetColumns treeView
   forM_ (zip4 columns renderFuncs orderings [0..]) $ \(col, renderFunc, ordering, colId) -> do
     let sortFunc xIter yIter = do
@@ -207,6 +208,26 @@ setTreeViewSorting treeView listStore sortedModel renderFuncs orderings _ = do
           return $ ordering (renderFunc xRow) (renderFunc yRow)
     treeSortableSetSortFunc sortedModel colId sortFunc
     treeViewColumnSetSortColumnId col colId
+
+-- | Sets incremental search in tree view.
+setTreeViewSearching :: (Controller c, TreeModelSortClass sm) =>
+                        TreeView
+                     -> LS c
+                     -> sm
+                     -> [PS c-> String]
+                     -> (String -> [String] -> Bool)
+                     -> c
+                     -> IO ()
+setTreeViewSearching treeView listStore sortedModel renderFuncs isPartOf _ = do
+  -- TODO: accent-independent search or TreeModelFilter
+  let rowEqualFunc :: (String -> TreeIter -> IO Bool)
+      rowEqualFunc txt iter = do
+        childIter <- treeModelSortConvertIterToChildIter sortedModel iter
+        -- row <- customStoreGetRow listStore childIter
+        row <- treeModelGetRow listStore childIter
+        -- return $ any (\f -> text_ `isInfixOf` f row) renderFuncs
+        return $ txt `isPartOf` map ($ row) renderFuncs
+  treeViewSetSearchEqualFunc treeView (Just rowEqualFunc)
 
 mkMainWindowGui :: Builder -> DB.ConnectionPool -> IO Window
 mkMainWindowGui builder_ db = do
@@ -285,10 +306,9 @@ mkPanelGui :: (Controller c,
               DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
 mkPanelGui db setMainWindowState c = do
 
-  -- Setting tree view models from glade doesn't work: stablish connection here and we can
-  -- use treeViewGet* functions afterwards.
-  -- Tried: billingConceptsLs <- treeViewGetListStore billingConceptsTv
-  --        mapM_ (listStoreAppend billingConceptsLs) billingConceptsEL
+  -- Setting tree view models from glade doesn't work: set connection here.
+  -- Tried: ls <- treeViewGetListStore tv
+  --        mapM_ (listStoreAppend ls) e
 
   s  <- selector c
   e  <- entities db c
@@ -297,15 +317,7 @@ mkPanelGui db setMainWindowState c = do
   setSelectorModel     s sm    c
   setSelectorRenderers s ls    c
   setSelectorSorting   s ls sm c
-
-  -- -- Incremental search in tree view
-
-  -- -- TODO: accent-independent search or TreeModelFilter
-  -- let equalFunc text_ iter = do
-  --       childIter <- liftIO $ treeModelSortConvertIterToChildIter billingConceptsSm iter
-  --       row <- liftIO $ customStoreGetRow billingConceptsLs childIter
-  --       return $ any (\f -> text_ `isInfixOf` f row) renderFuncs
-  -- liftIO $ treeViewSetSearchEqualFunc billingConceptsTv (Just equalFunc)
+  setSelectorSearching s ls sm c
 
   -- -- Connect selector
 
