@@ -26,6 +26,7 @@ import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import qualified Network                  as N (PortID (PortNumber))
 import           Sepa.BillingConcept
+import           Sepa.Debtor
 
 -- -- | I assume that the elements in this record have their own state (e.g. through IORef's
 -- -- or MVar's), so they can be used in callbacks.
@@ -180,6 +181,25 @@ instance Controller BillingConceptsController where
                 , priceToString . (^. finalPrice) . DB.entityVal
                 ]
 
+data DebtorsController = DE PanelId Builder
+
+instance Controller DebtorsController where
+  type E DebtorsController = Debtor
+  type S DebtorsController = TreeView
+  builder  (DE _        builder_) = builder_
+  panelId  (DE panelId_ _       ) = panelId_
+  selector (DE panelId_ builder_) =
+    builderGetObject builder_ castToTreeView (panelId_ ++ "_Tv")
+  setSelectorModel s m   _ = treeViewSetModel s m
+  setSelectorRenderers s ls    c = setTreeViewRenderers s ls    (renderers c) c
+  setSelectorSorting   s ls sm c = setTreeViewSorting   s ls sm (renderers c) orderings c
+    where orderings = repeat compare -- TODO: catalan collation
+  setSelectorSearching s ls sm c = setTreeViewSearching s ls sm (renderers c) isPartOf c
+    where tx `isPartOf` txs = any (tx `isInfixOf`) txs
+  renderers _ = [ T.unpack      . (^. lastName)   . DB.entityVal
+                , T.unpack      . (^. firstName)  . DB.entityVal
+                ]
+
 setTreeViewRenderers :: Controller c => TreeView -> LS c -> [PS c -> String] -> c -> IO ()
 setTreeViewRenderers treeView listStore renderFuncs _ = do
   -- forall columns: set renderer, set sorting func
@@ -235,6 +255,7 @@ mkMainWindowGui builder_ db = do
   -- Create panel controllers and helper lists
 
   let controllers   = [ MkBController (BC "BC" builder_)
+                      , MkBController (DE "DE" builder_)
                       ] :: [BController]
   choosers          <- mapM bChooser controllers :: IO [ToggleButton]
   panels            <- mapM bPanel controllers   :: IO [VBox]

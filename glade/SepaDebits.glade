@@ -996,6 +996,11 @@
       </packing>
     </child>
   </object>
+  <object class="GtkImage" id="cancelDirectDebitIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-cancel</property>
+  </object>
   <object class="GtkButton" id="DD_cancelBt">
     <property name="label" translatable="yes">Cancel·la els canvis</property>
     <property name="use_action_appearance">False</property>
@@ -1036,11 +1041,6 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-cancel</property>
   </object>
-  <object class="GtkImage" id="cancelDirectDebitIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-cancel</property>
-  </object>
   <object class="GtkImage" id="deleteBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -1075,6 +1075,11 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
+  </object>
+  <object class="GtkImage" id="newBillingConceptIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-new</property>
   </object>
   <object class="GtkImage" id="newDebtorIcon">
     <property name="visible">True</property>
@@ -1188,6 +1193,31 @@
                             <property name="reorderable">True</property>
                             <child internal-child="selection">
                               <object class="GtkTreeSelection" id="treeview-selection1"/>
+                            </child>
+                            <child>
+                              <object class="GtkTreeViewColumn" id="treeviewcolumn5">
+                                <property name="resizable">True</property>
+                                <property name="sizing">autosize</property>
+                                <property name="title" translatable="yes">Cognoms</property>
+                                <property name="clickable">True</property>
+                                <property name="sort_indicator">True</property>
+                                <property name="sort_column_id">0</property>
+                                <child>
+                                  <object class="GtkCellRendererText" id="cellrenderertext6"/>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkTreeViewColumn" id="treeviewcolumn7">
+                                <property name="sizing">autosize</property>
+                                <property name="title" translatable="yes">Nom</property>
+                                <property name="clickable">True</property>
+                                <property name="sort_indicator">True</property>
+                                <property name="sort_column_id">0</property>
+                                <child>
+                                  <object class="GtkCellRendererText" id="cellrenderertext7"/>
+                                </child>
+                              </object>
                             </child>
                           </object>
                         </child>
@@ -1778,11 +1808,6 @@
         </child>
       </object>
     </child>
-  </object>
-  <object class="GtkImage" id="newBillingConceptIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
   </object>
   <object class="GtkImage" id="newDirectDebitIcon">
     <property name="visible">True</property>
