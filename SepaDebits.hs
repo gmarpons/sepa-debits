@@ -18,6 +18,7 @@ module Main
 import           Control.Lens             hiding (elements, set, view)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.State
 import           Data.IORef
 import           Data.List
 import qualified Data.Text                as T (pack, replace, unpack)
@@ -84,18 +85,20 @@ type LS c = ListStore (PS c)    -- ^ Used to simplify type signatures in Control
 -- We need the type @c@ to appear in the type of functions only for the compiler selecting
 -- the correct controller instance. The main purpose of this monad is to shorten type
 -- annotations in class @Controller@ functions.
-newtype M c a = M { runController :: c -> IO a }
+newtype PanelM c a = PanelM { runPanel :: c -> IO a }
 
-instance (Controller c) => Monad (M c) where
-  return a = M (\_ -> return a)
-  M f >>= m = M (\c -> f c >>= g c)
-    where g c a = let (M g') = m a in g' c
+instance (Controller c) => Monad (PanelM c) where
+  return a = PanelM (\_ -> return a)
+  PanelM f >>= m = PanelM (\c -> f c >>= g c)
+    where g c a = let (PanelM g') = m a in g' c
 
-instance (Controller c) => MonadIO (M c) where
-  liftIO io = M (const io)
+instance (Controller c) => MonadIO (PanelM c) where
+  liftIO io = PanelM (const io)
 
-controller :: (Controller c) => M c c
-controller = M return
+controller :: (Controller c) => PanelM c c
+controller = PanelM return
+
+-- type PanelMSt c = StateT PanelState (PanelM c)
 
 -- | Generic panel controller, used to factorize implementation of debtors, billing
 -- concepts and direct debits panels (an VBox with all its contained widgets). It's main
@@ -114,35 +117,35 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   -- All instances need to implement, at least, the following functions
   panelId              :: c -> PanelId -- ^ Instances need to implement this.
   builder              :: c -> Builder -- ^ Instances need to implement this.
-  selector             ::                                                       M c (S c)
-  setSelectorModel     :: (TreeModelClass m)      => S c         -> m        -> M c ()
-  connectSelector      :: (TreeModelSortClass sm) => S c         -> sm -> () -> M c ()
+  selector             ::                                                       PanelM c (S c)
+  setSelectorModel     :: (TreeModelClass m)      => S c         -> m        -> PanelM c ()
+  connectSelector      :: (TreeModelSortClass sm) => S c         -> sm -> () -> PanelM c ()
 
   -- The following functions may be re-implemented, default instance implementation does
   -- nothing
-  setSelectorRenderers ::                            S c -> LS c       -> M c ()
-  setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm -> M c ()
-  setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm -> M c ()
+  setSelectorRenderers ::                            S c -> LS c       -> PanelM c ()
+  setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm -> PanelM c ()
+  setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm -> PanelM c ()
 
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
   panel                :: c -> IO VBox
   chooser              :: c -> IO ToggleButton
-  newTb                ::                                        M c ToggleButton
-  editTb               ::                                        M c ToggleButton
-  deleteBt             ::                                        M c Button
-  saveBt               ::                                        M c Button
-  cancelBt             ::                                        M c Button
-  elements             :: DB.ConnectionPool                   -> M c [PS c]
+  newTb                ::                                        PanelM c ToggleButton
+  editTb               ::                                        PanelM c ToggleButton
+  deleteBt             ::                                        PanelM c Button
+  saveBt               ::                                        PanelM c Button
+  cancelBt             ::                                        PanelM c Button
+  elements             :: DB.ConnectionPool                   -> PanelM c [PS c]
 
   -- The following are lists of functions.
-  renderers            ::                                        M c [PS c -> String]
+  renderers            ::                                        PanelM c [PS c -> String]
 
   -- | A Template Method pattern (it is implemented once for all instances) that
   -- initializes all the panel widgets, including connection with persistent model and
   -- callback events. All the other functions in this class are here only to be called by
   -- @mkController@, except @panelId@, @panel@ and @chooser@.
-  mkController         :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> M c ()
+  mkController         :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> PanelM c ()
 
   -- Default implementations for some functions
   setSelectorRenderers _ _   = return ()
@@ -159,7 +162,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   renderers    = return []
   mkController = mkPanelGui    -- Implemented as a top-level function
 
-getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> M c b
+getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> PanelM c b
 getGladeObject cast name = do
   c <- controller
   liftIO $ builderGetObject (builder c) cast (panelId c ++ name)
@@ -183,7 +186,7 @@ bPanelId      (MkBController boxed)      = panelId boxed
 bBuilder      (MkBController boxed)      = builder boxed
 bChooser      (MkBController boxed)      = chooser boxed
 bPanel        (MkBController boxed)      = panel   boxed
-bRunMkController (MkBController boxed) db f = runController (mkController db f) boxed
+bRunMkController (MkBController boxed) db f = runPanel (mkController db f) boxed
 
 data BillingConceptsController = BC PanelId Builder
 
@@ -226,7 +229,7 @@ instance Controller DebtorsController where
                       ]
   connectSelector s sm f = connectTreeView s sm f
 
-setTreeViewRenderers :: Controller c => TreeView -> LS c -> M c ()
+setTreeViewRenderers :: Controller c => TreeView -> LS c -> PanelM c ()
 setTreeViewRenderers treeView listStore = do
   renderFuncs <- renderers
   -- forall columns: set renderer, set sorting func
@@ -243,7 +246,7 @@ setTreeViewSorting :: (Controller c, TreeSortableClass sm) =>
                    -> LS c
                    -> sm
                    -> [String -> String -> Ordering]
-                   -> M c ()
+                   -> PanelM c ()
 setTreeViewSorting treeView listStore sortedModel orderings = do
   renderFuncs <- renderers
   columns <- liftIO $ treeViewGetColumns treeView
@@ -261,7 +264,7 @@ setTreeViewSearching :: (Controller c, TreeModelSortClass sm) =>
                      -> LS c
                      -> sm
                      -> (String -> [String] -> Bool)
-                     -> M c ()
+                     -> PanelM c ()
 setTreeViewSearching treeView listStore sortedModel isPartOf = do
   -- TODO: accent-independent search or TreeModelFilter
   renderFuncs <- renderers
@@ -278,7 +281,7 @@ connectTreeView :: (Controller c, TreeModelSortClass sm) =>
                    TreeView
                    -> sm
                    -> ()
-                   -> M c ()
+                   -> PanelM c ()
 connectTreeView treeView sortedModel _ = do
   selection <- liftIO $ treeViewGetSelection treeView
   let toChildIter = treeModelSortConvertIterToChildIter sortedModel
@@ -374,7 +377,7 @@ mkMainWindowGui builder_ db = do
 
 mkPanelGui :: (Controller c,
                DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
-              DB.ConnectionPool -> (MainWindowState -> IO ()) -> M c ()
+              DB.ConnectionPool -> (MainWindowState -> IO ()) -> PanelM c ()
 mkPanelGui db _setMainWindowState = do
 
   -- Setting tree view models from glade doesn't work: set connection here.
