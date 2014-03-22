@@ -200,12 +200,12 @@
               <object class="GtkTable" id="table1">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <property name="n_rows">2</property>
+                <property name="n_rows">3</property>
                 <property name="n_columns">4</property>
                 <property name="column_spacing">5</property>
                 <property name="row_spacing">5</property>
                 <child>
-                  <object class="GtkEntry" id="BC_BasePriceEn">
+                  <object class="GtkEntry" id="BC_basePriceEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="max_length">11</property>
@@ -215,23 +215,6 @@
                   <packing>
                     <property name="left_attach">3</property>
                     <property name="right_attach">4</property>
-                    <property name="x_options">GTK_FILL</property>
-                  </packing>
-                </child>
-                <child>
-                  <object class="GtkEntry" id="BC_FinalPriceEn">
-                    <property name="visible">True</property>
-                    <property name="can_focus">True</property>
-                    <property name="editable">False</property>
-                    <property name="max_length">11</property>
-                    <property name="invisible_char">●</property>
-                    <property name="width_chars">11</property>
-                  </object>
-                  <packing>
-                    <property name="left_attach">3</property>
-                    <property name="right_attach">4</property>
-                    <property name="top_attach">1</property>
-                    <property name="bottom_attach">2</property>
                     <property name="x_options">GTK_FILL</property>
                   </packing>
                 </child>
@@ -248,32 +231,18 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkLabel" id="label5">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="xalign">1</property>
-                    <property name="label" translatable="yes">Preu amb IVA:</property>
-                  </object>
-                  <packing>
-                    <property name="left_attach">2</property>
-                    <property name="right_attach">3</property>
-                    <property name="top_attach">1</property>
-                    <property name="bottom_attach">2</property>
-                  </packing>
-                </child>
-                <child>
                   <object class="GtkLabel" id="label6">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="xalign">0</property>
-                    <property name="label" translatable="yes">Concepte:</property>
+                    <property name="label" translatable="yes">Concepte (no repetir):</property>
                   </object>
                   <packing>
                     <property name="x_options">GTK_FILL</property>
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkEntry" id="BC_DescriptionEn">
+                  <object class="GtkEntry" id="BC_EE_longNameEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="max_length">70</property>
@@ -290,30 +259,26 @@
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <child>
-                      <object class="GtkLabel" id="label7">
+                      <object class="GtkLabel" id="label">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="xalign">1</property>
-                        <property name="label" translatable="yes">% IVA:</property>
+                        <property name="label" translatable="yes">Etiqueta al rebut: </property>
                       </object>
                       <packing>
                         <property name="expand">True</property>
                         <property name="fill">True</property>
-                        <property name="padding">5</property>
                         <property name="position">0</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkEntry" id="BC_VatRatioEn">
+                      <object class="GtkEntry" id="BC_EE_shortNameEn">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
-                        <property name="max_length">11</property>
                         <property name="invisible_char">●</property>
-                        <property name="width_chars">11</property>
-                        <property name="text" translatable="yes">0,07</property>
                       </object>
                       <packing>
-                        <property name="expand">False</property>
+                        <property name="expand">True</property>
                         <property name="fill">True</property>
                         <property name="position">1</property>
                       </packing>
@@ -338,6 +303,74 @@
                     <property name="top_attach">1</property>
                     <property name="bottom_attach">2</property>
                     <property name="x_options">GTK_FILL</property>
+                  </packing>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
+                <child>
+                  <object class="GtkEntry" id="BC_finalPriceEn">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="editable">False</property>
+                    <property name="max_length">11</property>
+                    <property name="invisible_char">●</property>
+                    <property name="width_chars">11</property>
+                    <property name="invisible_char_set">True</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">3</property>
+                    <property name="right_attach">4</property>
+                    <property name="top_attach">2</property>
+                    <property name="bottom_attach">3</property>
+                    <property name="x_options">GTK_FILL</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="label5">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="xalign">1</property>
+                    <property name="label" translatable="yes">Preu amb IVA:</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">2</property>
+                    <property name="right_attach">3</property>
+                    <property name="top_attach">2</property>
+                    <property name="bottom_attach">3</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkEntry" id="BC_vatRatioEn">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="max_length">11</property>
+                    <property name="invisible_char">●</property>
+                    <property name="width_chars">11</property>
+                    <property name="invisible_char_set">True</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">3</property>
+                    <property name="right_attach">4</property>
+                    <property name="top_attach">1</property>
+                    <property name="bottom_attach">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="label7">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="xalign">1</property>
+                    <property name="label" translatable="yes">% IVA:</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">2</property>
+                    <property name="right_attach">3</property>
+                    <property name="top_attach">1</property>
+                    <property name="bottom_attach">2</property>
                   </packing>
                 </child>
               </object>
@@ -996,20 +1029,6 @@
       </packing>
     </child>
   </object>
-  <object class="GtkImage" id="cancelDirectDebitIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-cancel</property>
-  </object>
-  <object class="GtkButton" id="DD_cancelBt">
-    <property name="label" translatable="yes">Cancel·la els canvis</property>
-    <property name="use_action_appearance">False</property>
-    <property name="visible">True</property>
-    <property name="can_focus">True</property>
-    <property name="receives_default">True</property>
-    <property name="use_action_appearance">False</property>
-    <property name="image">cancelDirectDebitIcon</property>
-  </object>
   <object class="GtkButton" id="DD_deleteBt">
     <property name="label" translatable="yes">button</property>
     <property name="use_action_appearance">False</property>
@@ -1040,6 +1059,20 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-cancel</property>
+  </object>
+  <object class="GtkImage" id="cancelDirectDebitIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-cancel</property>
+  </object>
+  <object class="GtkButton" id="DD_cancelBt">
+    <property name="label" translatable="yes">Cancel·la els canvis</property>
+    <property name="use_action_appearance">False</property>
+    <property name="visible">True</property>
+    <property name="can_focus">True</property>
+    <property name="receives_default">True</property>
+    <property name="use_action_appearance">False</property>
+    <property name="image">cancelDirectDebitIcon</property>
   </object>
   <object class="GtkImage" id="deleteBillingConceptIcon">
     <property name="visible">True</property>
@@ -1082,6 +1115,11 @@
     <property name="stock">gtk-new</property>
   </object>
   <object class="GtkImage" id="newDebtorIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-new</property>
+  </object>
+  <object class="GtkImage" id="newDirectDebitIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
@@ -1808,11 +1846,6 @@
         </child>
       </object>
     </child>
-  </object>
-  <object class="GtkImage" id="newDirectDebitIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
   </object>
   <object class="GtkImage" id="newIm">
     <property name="visible">True</property>

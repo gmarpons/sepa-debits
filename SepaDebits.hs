@@ -7,18 +7,14 @@
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 
---{-# LANGUAGE UndecidableInstances      #-}
---{-# LANGUAGE MultiParamTypeClasses         #-}
---{-# LANGUAGE FlexibleInstances         #-}
-
 module Main
        ( main
        ) where
 
-import           Control.Lens             hiding (elements, set, view)
+import           Control.Lens             hiding (element, elements, set, view)
+import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.State
 import           Data.IORef
 import           Data.List
 import qualified Data.Text                as T (pack, replace, unpack)
@@ -49,7 +45,7 @@ data MainWindowState
 
 makeLenses ''MainWindowState
 
-data PanelState
+data PanelState c
   = NoSel
   | Sel     { _item :: TreeIter }
   | EditNew { _data :: [String], _isValid :: Bool }
@@ -105,7 +101,7 @@ controller = PanelM return
 -- entry point is template method @mkController@. In general, functions in this class are
 -- non-pure, as they use state stored by Gtk in the IO monad. The class is parametrized
 -- (through associated types) with an entity type and a @selector@ (e.g. TreeView) type.
-class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
+class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, WidgetClass (S c)) =>
       Controller c where
 
   -- | Entity type, i.e., type of the elements shown in the panel (e.g Debtor).
@@ -119,13 +115,15 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   builder              :: c -> Builder -- ^ Instances need to implement this.
   selector             ::                                                       PanelM c (S c)
   setSelectorModel     :: (TreeModelClass m)      => S c         -> m        -> PanelM c ()
-  connectSelector      :: (TreeModelSortClass sm) => S c         -> sm -> () -> PanelM c ()
+  connectSelector      :: (TreeModelSortClass sm) => S c         -> sm -> (PanelState (E c) -> IO ()) -> PanelM c ()
 
   -- The following functions may be re-implemented, default instance implementation does
   -- nothing
+  -- FIXME: I've needed a c param in putElement to fix its type
   setSelectorRenderers ::                            S c -> LS c       -> PanelM c ()
   setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm -> PanelM c ()
   setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm -> PanelM c ()
+  putElement           :: c -> TreeIter -> LS c -> [PS c -> String] -> [Entry] -> IO ()
 
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
@@ -136,10 +134,12 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   deleteBt             ::                                        PanelM c Button
   saveBt               ::                                        PanelM c Button
   cancelBt             ::                                        PanelM c Button
+  editEntries          ::                                        PanelM c [Entry]
+  editWidgets          ::                                        PanelM c [Widget]
+  selectWidgets        ::                                        PanelM c [Widget]
   elements             :: DB.ConnectionPool                   -> PanelM c [PS c]
-
-  -- The following are lists of functions.
   renderers            ::                                        PanelM c [PS c -> String]
+  panelIdM             ::                                        PanelM c PanelId
 
   -- | A Template Method pattern (it is implemented once for all instances) that
   -- initializes all the panel widgets, including connection with persistent model and
@@ -151,6 +151,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   setSelectorRenderers _ _   = return ()
   setSelectorSorting   _ _ _ = return ()
   setSelectorSearching _ _ _ = return ()
+  putElement           _ _ _ _ _ = return ()
   panel   c    = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
   chooser c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_Tb")
   newTb        = getGladeObject castToToggleButton "_newTb"
@@ -158,9 +159,13 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) 
   deleteBt     = getGladeObject castToButton       "_deleteBt"
   saveBt       = getGladeObject castToButton       "_saveBt"
   cancelBt     = getGladeObject castToButton       "_cancelBt"
+  editEntries  = return []
+  editWidgets  = return []
+  selectWidgets = return []
   elements db  = liftIO $ flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter (E c)]) []
   renderers    = return []
-  mkController = mkPanelGui    -- Implemented as a top-level function
+  panelIdM     = do { c <- controller; return (panelId c) }
+  mkController = mkControllerImpl -- Implemented as a top-level function
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> PanelM c b
 getGladeObject cast name = do
@@ -209,6 +214,10 @@ instance Controller BillingConceptsController where
                      , priceToString . (^. finalPrice) . DB.entityVal
                      ]
   connectSelector s sm f = connectTreeView s sm f
+  putElement _ iter ls renderers_ editEntries_ = do
+    entity <- treeModelGetRow ls iter
+    return ()
+    --mapM (\entry txt -> set entry [entryText := txt]) editEntries_ <*> map ($ entity) renderers_
 
 data DebtorsController = DE PanelId Builder
 
@@ -271,29 +280,25 @@ setTreeViewSearching treeView listStore sortedModel isPartOf = do
   let rowEqualFunc :: (String -> TreeIter -> IO Bool)
       rowEqualFunc txt iter = do
         childIter <- treeModelSortConvertIterToChildIter sortedModel iter
-        -- row <- customStoreGetRow listStore childIter
         row <- treeModelGetRow listStore childIter
-        -- return $ any (\f -> text_ `isInfixOf` f row) renderFuncs
         return $ txt `isPartOf` map ($ row) renderFuncs
   liftIO $ treeViewSetSearchEqualFunc treeView (Just rowEqualFunc)
 
 connectTreeView :: (Controller c, TreeModelSortClass sm) =>
                    TreeView
                    -> sm
-                   -> ()
+                   -> (PanelState (E c) -> IO ())
                    -> PanelM c ()
-connectTreeView treeView sortedModel _ = do
+connectTreeView treeView sortedModel setState = do
   selection <- liftIO $ treeViewGetSelection treeView
   let toChildIter = treeModelSortConvertIterToChildIter sortedModel
   let onSelectionChangedAction = do
         count <- treeSelectionCountSelectedRows selection
         if count == 0
-          then {- setState NoSel adRef stRef gui panelId -}
-            print "NoSel"
+          then setState NoSel
           else treeSelectionSelectedForeach selection $ \it -> do
             cIt <- toChildIter it
-            {- setState (Sel cIt) adRef stRef gui panelId -}
-            print cIt
+            setState (Sel cIt)
 
   _ <- liftIO $ on selection treeSelectionSelectionChanged $ liftIO onSelectionChangedAction
 
@@ -370,34 +375,102 @@ mkMainWindowGui builder_ db = do
   st <- readIORef stRef
   setState st
 
-  -- Create Gui for all panels, and return
+  -- Create controllers for all panels, and return
 
   mapM_ (\boxed -> bRunMkController boxed db setState) controllers
   return mainWd
 
-mkPanelGui :: (Controller c,
-               DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
-              DB.ConnectionPool -> (MainWindowState -> IO ()) -> PanelM c ()
-mkPanelGui db _setMainWindowState = do
-
-  -- Setting tree view models from glade doesn't work: set connection here.
-  -- Tried: ls <- treeViewGetListStore tv
-  --        mapM_ (listStoreAppend ls) e
+mkControllerImpl :: forall c . (Controller c,
+                     DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
+                    DB.ConnectionPool -> (MainWindowState -> IO ()) -> PanelM c ()
+mkControllerImpl db setMainWdState = do
 
   -- We could put most of the variables in the following code (s, e, ls, etc.) under the
   -- monad M, but prefer to show them to make explicit the dependencies among Gtk
   -- operations.
 
-  s  <- selector
-  e  <- elements db
-  ls <- liftIO $ listStoreNew e
-  sm <- liftIO $ treeModelSortNewWithModel ls
-  setSelectorModel     s sm
-  setSelectorRenderers s ls
-  setSelectorSorting   s ls sm
-  setSelectorSearching s ls sm
---  connectSelector      s    sm setState
-  connectSelector      s    sm ()
+  selector_  <- selector
+  e          <- elements db
+  ls         <- liftIO $ listStoreNew e
+  sm         <- liftIO $ treeModelSortNewWithModel ls
+  setSelectorModel     selector_ sm
+  setSelectorRenderers selector_ ls
+  setSelectorSorting   selector_ ls sm
+  setSelectorSearching selector_ ls sm
+
+  newTb_         <- newTb
+  editTb_        <- editTb
+  deleteBt_      <- deleteBt
+  saveBt_        <- saveBt
+  cancelBt_      <- cancelBt
+  panelId_       <- panelIdM
+  c              <- controller
+  rs             <- renderers
+  editEntries_   <- editEntries
+  editWidgets_   <- editWidgets
+  selectWidgets_ <- selectWidgets
+
+  -- Place panel initial state in an IORef
+
+  stRef <- liftIO $ newIORef NoSel :: PanelM c (IORef (PanelState (E c)))
+
+  -- Panel state function
+  let setState' :: PanelState (E c) -> IO ()
+      setState' NoSel = do
+        forM_ editEntries_                    (`set` [widgetSensitive    := False, entryText := ""])
+        forM_ editWidgets_                    (`set` [widgetSensitive    := False])
+        forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
+        forM_ [deleteBt_, saveBt_, cancelBt_] (`set` [widgetSensitive    := False])
+        forM_ [editTb_]                       (`set` [widgetSensitive    := False])
+        forM_ [selector_]                     (`set` [widgetSensitive    := True ])
+        forM_ [newTb_]                        (`set` [widgetSensitive    := True ])
+        forM_ [editTb_, newTb_]               (`set` [toggleButtonActive := False])
+        setMainWdState (View panelId_)
+      setState' (Sel element) = do
+        putElement c element ls rs editEntries_
+        forM_ editEntries_                    (`set` [widgetSensitive    := False])
+        forM_ editWidgets_                    (`set` [widgetSensitive    := False])
+        forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
+        forM_ selectWidgets_                  (`set` [widgetSensitive    := True ])
+        forM_ [selector_]                     (`set` [widgetSensitive    := True ])
+        forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := True ])
+        forM_ [deleteBt_]                     (`set` [widgetSensitive    := True ])
+        forM_ [editTb_, newTb_]               (`set` [toggleButtonActive := False])
+        setMainWdState (View panelId_)
+      setState' (EditNew _element valid) = do
+        forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
+        forM_ [selector_]                     (`set` [widgetSensitive    := False])
+        forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
+        forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
+        forM_ editEntries_                    (`set` [widgetSensitive    := True, entryText := "" ])
+        forM_ editWidgets_                    (`set` [widgetSensitive    := True ])
+        forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
+        forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
+        setMainWdState (Edit panelId_)
+      setState' (EditOld _element valid) = do
+        forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
+        forM_ [selector_]                     (`set` [widgetSensitive    := False])
+        forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
+        forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
+        forM_ editEntries_                    (`set` [widgetSensitive    := True ])
+        forM_ editWidgets_                    (`set` [widgetSensitive    := True ])
+        forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
+        forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
+        setMainWdState (Edit panelId_)
+  let setState :: PanelState (E c) -> IO ()
+      setState newSt = do
+        setState' newSt
+        writeIORef stRef newSt
+        print newSt
+
+  -- Set panel initial state
+
+  st <- liftIO $ readIORef stRef
+  liftIO $ setState st
+
+  -- Connect panel widgets
+
+  connectSelector selector_ sm setState
 
   return ()
 
