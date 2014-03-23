@@ -19,6 +19,7 @@ import           Data.List
 import qualified Data.Text                as T (Text, pack, replace, unpack)
 import qualified Data.Text.Lazy           as TL (unpack)
 import qualified Data.Time.Clock          as C (NominalDiffTime)
+import qualified Data.Time.Calendar       as C
 import qualified Database.Persist.MongoDB as DB
 import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
@@ -261,8 +262,9 @@ instance Controller DebtorsController where
     where orderings = repeat compare -- TODO: catalan collation
   setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
     where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
-  renderers  = return [ T.unpack      . (^. lastName)   . DB.entityVal
-                      , T.unpack      . (^. firstName)  . DB.entityVal
+  renderers  = return [ T.unpack        . (^. lastName)          . DB.entityVal
+                      , T.unpack        . (^. firstName)         . DB.entityVal
+                      , C.showGregorian . (^. registrationDate)  . DB.entityVal
                       ]
   editEntries = do e1 <- getGladeObject castToEntry "_EE_lastNameEn"
                    e2 <- getGladeObject castToEntry "_EE_firstNameEn"

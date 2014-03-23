@@ -282,6 +282,7 @@
                       <object class="GtkEntry" id="BC_EE_shortNameEn">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="max_length">10</property>
                         <property name="invisible_char">●</property>
                       </object>
                       <packing>
@@ -1032,6 +1033,15 @@
       </packing>
     </child>
   </object>
+  <object class="GtkButton" id="DD_cancelBt">
+    <property name="label" translatable="yes">Cancel·la els canvis</property>
+    <property name="use_action_appearance">False</property>
+    <property name="visible">True</property>
+    <property name="can_focus">True</property>
+    <property name="receives_default">True</property>
+    <property name="use_action_appearance">False</property>
+    <property name="image">cancelDirectDebitIcon</property>
+  </object>
   <object class="GtkButton" id="DD_deleteBt">
     <property name="label" translatable="yes">button</property>
     <property name="use_action_appearance">False</property>
@@ -1068,15 +1078,6 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-cancel</property>
   </object>
-  <object class="GtkButton" id="DD_cancelBt">
-    <property name="label" translatable="yes">Cancel·la els canvis</property>
-    <property name="use_action_appearance">False</property>
-    <property name="visible">True</property>
-    <property name="can_focus">True</property>
-    <property name="receives_default">True</property>
-    <property name="use_action_appearance">False</property>
-    <property name="image">cancelDirectDebitIcon</property>
-  </object>
   <object class="GtkImage" id="deleteBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -1111,6 +1112,11 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
+  </object>
+  <object class="GtkImage" id="newDebtorIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-new</property>
   </object>
   <object class="GtkWindow" id="mainWd">
     <property name="can_focus">False</property>
@@ -1242,6 +1248,23 @@
                                 <property name="sort_column_id">0</property>
                                 <child>
                                   <object class="GtkCellRendererText" id="cellrenderertext7"/>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkTreeViewColumn" id="treeviewcolumn6">
+                                <property name="resizable">True</property>
+                                <property name="sizing">autosize</property>
+                                <property name="title" translatable="yes">Alta</property>
+                                <property name="clickable">True</property>
+                                <property name="alignment">1</property>
+                                <property name="sort_indicator">True</property>
+                                <property name="sort_column_id">0</property>
+                                <child>
+                                  <object class="GtkCellRendererText" id="cellrenderertext8">
+                                    <property name="xalign">1</property>
+                                    <property name="alignment">right</property>
+                                  </object>
                                 </child>
                               </object>
                             </child>
@@ -1836,11 +1859,6 @@
     </child>
   </object>
   <object class="GtkImage" id="newBillingConceptIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
-  </object>
-  <object class="GtkImage" id="newDebtorIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
