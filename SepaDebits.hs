@@ -12,12 +12,11 @@ module Main
        ) where
 
 import           Control.Lens             hiding (element, elements, set, view)
-import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
 import           Data.List
-import qualified Data.Text                as T (pack, replace, unpack)
+import qualified Data.Text                as T (Text, pack, replace, unpack)
 import qualified Data.Text.Lazy           as TL (unpack)
 import qualified Data.Time.Clock          as C (NominalDiffTime)
 import qualified Database.Persist.MongoDB as DB
@@ -43,16 +42,15 @@ data MainWindowState
   = View { _choosedPanelId :: PanelId }
   | Edit { _choosedPanelId :: PanelId }
 
-makeLenses ''MainWindowState
+--makeLenses ''MainWindowState
 
 data PanelState c
   = NoSel
-  | Sel     { _item :: TreeIter }
-  | EditNew { _data :: [String], _isValid :: Bool }
-  | EditOld { _item :: TreeIter, _isValid :: Bool }
-  deriving Show
+  | Sel     { _iter :: TreeIter }
+  | EditNew { _data :: D c, _isValid :: Bool }
+  | EditOld { _iter :: TreeIter, _isValid :: Bool }
 
-makeLenses ''PanelState
+--makeLenses ''PanelState
 
 main :: IO ()
 main = do
@@ -110,12 +108,17 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   -- | Type of the selector widget (e.g. TreeView or ComboBox).
   type S c
 
+  data D c
+
   -- All instances need to implement, at least, the following functions
   panelId              :: c -> PanelId -- ^ Instances need to implement this.
   builder              :: c -> Builder -- ^ Instances need to implement this.
   selector             ::                                                       PanelM c (S c)
   setSelectorModel     :: (TreeModelClass m)      => S c         -> m        -> PanelM c ()
-  connectSelector      :: (TreeModelSortClass sm) => S c         -> sm -> (PanelState (E c) -> IO ()) -> PanelM c ()
+  connectSelector      :: (TreeModelSortClass sm) => S c         -> sm
+                       -> (PanelState c -> IO ()) -> PanelM c (IO ())
+  readData          :: c                                         -> [Entry] -> IO (D c)
+  validData            :: c -> D c                                          -> IO Bool
 
   -- The following functions may be re-implemented, default instance implementation does
   -- nothing
@@ -123,6 +126,10 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   setSelectorRenderers ::                            S c -> LS c       -> PanelM c ()
   setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm -> PanelM c ()
   setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm -> PanelM c ()
+  editEntries          ::                                        PanelM c [Entry]
+  editWidgets          ::                                        PanelM c [Widget]
+  selectWidgets        ::                                        PanelM c [Widget]
+  renderers            ::                                        PanelM c [PS c -> String]
 
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
@@ -133,11 +140,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   deleteBt             ::                                        PanelM c Button
   saveBt               ::                                        PanelM c Button
   cancelBt             ::                                        PanelM c Button
-  editEntries          ::                                        PanelM c [Entry]
-  editWidgets          ::                                        PanelM c [Widget]
-  selectWidgets        ::                                        PanelM c [Widget]
   elements             :: DB.ConnectionPool                   -> PanelM c [PS c]
-  renderers            ::                                        PanelM c [PS c -> String]
   panelIdM             ::                                        PanelM c PanelId
   putElement           :: c -> TreeIter -> LS c -> [PS c -> String] -> [Entry] -> IO ()
 
@@ -151,6 +154,10 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   setSelectorRenderers _ _   = return ()
   setSelectorSorting   _ _ _ = return ()
   setSelectorSearching _ _ _ = return ()
+  editEntries                = return []
+  editWidgets                = return []
+  selectWidgets              = return []
+  renderers                  = return []
   panel   c    = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
   chooser c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_Tb")
   newTb        = getGladeObject castToToggleButton "_newTb"
@@ -158,16 +165,12 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   deleteBt     = getGladeObject castToButton       "_deleteBt"
   saveBt       = getGladeObject castToButton       "_saveBt"
   cancelBt     = getGladeObject castToButton       "_cancelBt"
-  editEntries  = return []
-  editWidgets  = return []
-  selectWidgets = return []
   elements db  = liftIO $ flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter (E c)]) []
-  renderers    = return []
   panelIdM     = do { c <- controller; return (panelId c) }
-  mkController = mkControllerImpl -- Implemented as a top-level function
   putElement _ iter ls renderers_ entries = do
     entity <- treeModelGetRow ls iter
     forM_ (zip entries renderers_) $ \(e, r) -> set e [entryText := r entity]
+  mkController = mkControllerImpl -- Implemented as a top-level function
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> PanelM c b
 getGladeObject cast name = do
@@ -200,6 +203,11 @@ data BillingConceptsController = BC PanelId Builder
 instance Controller BillingConceptsController where
   type E BillingConceptsController = BillingConcept
   type S BillingConceptsController = TreeView
+  data D BillingConceptsController =
+    D { longNameD    :: T.Text
+      , shortNameD   :: T.Text
+      , basePriceD   :: Maybe Int
+      , vatRatioD    :: Maybe Int }
   builder  (BC _        builder_) = builder_
   panelId  (BC panelId_ _       ) = panelId_
   selector = getGladeObject castToTreeView "_Tv"
@@ -221,6 +229,19 @@ instance Controller BillingConceptsController where
                    e4 <- getGladeObject castToEntry "_EE_vatRatioEn"
                    e5 <- getGladeObject castToEntry "_EE_finalPriceEn"
                    return [e1, e2, e3, e4, e5]
+  readData _ [longNameEn, shortNameEn, basePriceEn, vatRatioEn, _] = do
+    longName_    <- get longNameEn    entryText
+    shortName_   <- get shortNameEn   entryText
+    basePrice_   <- get basePriceEn   entryText
+    vatRatio_    <- get vatRatioEn    entryText
+    return D { longNameD   = T.pack longName_
+             , shortNameD  = T.pack shortName_
+             , basePriceD  = Just (stringToPrice basePrice_)
+             , vatRatioD   = Just (stringToPrice vatRatio_)
+             }
+  readData _ _ = error "readData (BC): wrong number of entries"
+  validData _ d = do
+    return $ validBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
   connectSelector s sm f = connectTreeView s sm f
 
 data DebtorsController = DE PanelId Builder
@@ -294,8 +315,8 @@ setTreeViewSearching treeView listStore sortedModel isPartOf = do
 connectTreeView :: (Controller c, TreeModelSortClass sm) =>
                    TreeView
                    -> sm
-                   -> (PanelState (E c) -> IO ())
-                   -> PanelM c ()
+                   -> (PanelState c -> IO ())
+                   -> PanelM c (IO ())
 connectTreeView treeView sortedModel setState = do
   selection <- liftIO $ treeViewGetSelection treeView
   let toChildIter = treeModelSortConvertIterToChildIter sortedModel
@@ -309,9 +330,7 @@ connectTreeView treeView sortedModel setState = do
 
   _ <- liftIO $ on selection treeSelectionSelectionChanged $ liftIO onSelectionChangedAction
 
-  cancelBt_ <- cancelBt
-  _ <- liftIO $ on cancelBt_ buttonActivated onSelectionChangedAction
-  return ()
+  return onSelectionChangedAction
 
 
 mkMainWindowGui :: Builder -> DB.ConnectionPool -> IO Window
@@ -419,10 +438,10 @@ mkControllerImpl db setMainWdState = do
 
   -- Place panel initial state in an IORef
 
-  stRef <- liftIO $ newIORef NoSel :: PanelM c (IORef (PanelState (E c)))
+  stRef <- liftIO $ newIORef NoSel :: PanelM c (IORef (PanelState c))
 
   -- Panel state function
-  let setState' :: PanelState (E c) -> IO ()
+  let setState' :: PanelState c -> IO ()
       setState' NoSel = do
         forM_ editEntries_                    (`set` [widgetSensitive    := False, entryText := ""])
         forM_ editWidgets_                    (`set` [widgetSensitive    := False])
@@ -433,8 +452,8 @@ mkControllerImpl db setMainWdState = do
         forM_ [newTb_]                        (`set` [widgetSensitive    := True ])
         forM_ [editTb_, newTb_]               (`set` [toggleButtonActive := False])
         setMainWdState (View panelId_)
-      setState' (Sel element) = do
-        putElement c element ls rs editEntries_
+      setState' (Sel iter) = do
+        putElement c iter ls rs editEntries_
         forM_ editEntries_                    (`set` [widgetSensitive    := False])
         forM_ editWidgets_                    (`set` [widgetSensitive    := False])
         forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
@@ -444,7 +463,7 @@ mkControllerImpl db setMainWdState = do
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := True ])
         forM_ [editTb_, newTb_]               (`set` [toggleButtonActive := False])
         setMainWdState (View panelId_)
-      setState' (EditNew _element valid) = do
+      setState' (EditNew _iter valid) = do
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := False])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
@@ -454,7 +473,7 @@ mkControllerImpl db setMainWdState = do
         forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
         forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
         setMainWdState (Edit panelId_)
-      setState' (EditOld _element valid) = do
+      setState' (EditOld _iter valid) = do
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := False])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
@@ -464,11 +483,10 @@ mkControllerImpl db setMainWdState = do
         forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
         forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
         setMainWdState (Edit panelId_)
-  let setState :: PanelState (E c) -> IO ()
+  let setState :: PanelState c -> IO ()
       setState newSt = do
         setState' newSt
         writeIORef stRef newSt
-        print newSt
 
   -- Set panel initial state
 
@@ -477,13 +495,50 @@ mkControllerImpl db setMainWdState = do
 
   -- Connect panel widgets
 
-  connectSelector selector_ sm setState
+  onSelectionChangedAction <- connectSelector selector_ sm setState
+
+  _ <- liftIO $ on cancelBt_ buttonActivated onSelectionChangedAction
+
+  _ <- liftIO $ on editTb_ toggled $ do
+    isActive <- toggleButtonGetActive editTb_
+    when isActive $ do
+      Sel iter <- readIORef stRef -- FIXME: unsafe pattern
+      -- OLD: elem <- treeModelGetRow ls iter
+      -- OLD: let valid = validStrings (itemToStrings item)
+      -- Assume that before an Edit has been a Sel that has filled editEntries
+      d <- readData c editEntries_
+      v <- validData c d
+      setState (EditOld iter v)
+
+  _ <- liftIO $ on newTb_ toggled $ do
+    isActive <- toggleButtonGetActive newTb_
+    when isActive $ do
+      -- OLD: let s = guiNewItemToStrings gui
+      d <- readData c editEntries_
+      v <- validData c d
+      setState (EditNew d v)
 
   return ()
 
+-- TODO: Merge this function with BC.priceToText
 priceToString :: Int -> String
 priceToString num = TL.unpack $ format (left padding ' ') (toText num)
   where
     toText    = T.replace "." (T.pack separator) . priceToText
-    separator = ","
+    separator = ","             -- FIXME: Take separator from locale
     padding   = 10
+
+-- TODO: set signal on all numeric entries to guarantee only valid chars
+
+-- | Pre: str contains only isNumeric or ',' (or spaces that we trim).
+stringToPrice :: String -> Int
+stringToPrice str =
+  let (integer, fractional') = break (== separator) $ dropWhile (==' ') str
+      separator = ','           -- FIXME: Take separator from locale
+      fractional = case fractional' of
+        []             -> "00"
+        _ : []         -> "00"
+        _ : x : []     -> x : "0"
+        _ : x : y : [] -> x : [y]
+        _              -> error "stringToPrice: Too long fractional part"
+  in read $ integer ++ fractional

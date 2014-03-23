@@ -30,7 +30,7 @@
                   <object class="GtkTreeViewColumn" id="treeviewcolumn0">
                     <property name="resizable">True</property>
                     <property name="sizing">autosize</property>
-                    <property name="title" translatable="yes">Descripció (no es pot repetir)</property>
+                    <property name="title" translatable="yes">Descripció</property>
                     <property name="clickable">True</property>
                     <property name="sort_indicator">True</property>
                     <property name="sort_column_id">0</property>
@@ -205,6 +205,12 @@
                 <property name="column_spacing">5</property>
                 <property name="row_spacing">5</property>
                 <child>
+                  <placeholder/>
+                </child>
+                <child>
+                  <placeholder/>
+                </child>
+                <child>
                   <object class="GtkEntry" id="BC_EE_basePriceEn">
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
@@ -264,7 +270,7 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="xalign">1</property>
-                        <property name="label" translatable="yes">Etiqueta al rebut: </property>
+                        <property name="label" translatable="yes">Etiqueta al rebut (no pot estar en blanc): </property>
                       </object>
                       <packing>
                         <property name="expand">True</property>
@@ -305,12 +311,6 @@
                     <property name="bottom_attach">2</property>
                     <property name="x_options">GTK_FILL</property>
                   </packing>
-                </child>
-                <child>
-                  <placeholder/>
-                </child>
-                <child>
-                  <placeholder/>
                 </child>
                 <child>
                   <object class="GtkEntry" id="BC_EE_finalPriceEn">
@@ -1112,16 +1112,6 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
   </object>
-  <object class="GtkImage" id="newBillingConceptIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
-  </object>
-  <object class="GtkImage" id="newDebtorIcon">
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="stock">gtk-new</property>
-  </object>
   <object class="GtkWindow" id="mainWd">
     <property name="can_focus">False</property>
     <property name="title" translatable="yes">GUIA Gestió</property>
@@ -1844,6 +1834,16 @@
         </child>
       </object>
     </child>
+  </object>
+  <object class="GtkImage" id="newBillingConceptIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-new</property>
+  </object>
+  <object class="GtkImage" id="newDebtorIcon">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-new</property>
   </object>
   <object class="GtkImage" id="newDirectDebitIcon">
     <property name="visible">True</property>
