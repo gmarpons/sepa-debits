@@ -123,7 +123,6 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   setSelectorRenderers ::                            S c -> LS c       -> PanelM c ()
   setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm -> PanelM c ()
   setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm -> PanelM c ()
-  putElement           :: c -> TreeIter -> LS c -> [PS c -> String] -> [Entry] -> IO ()
 
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
@@ -140,6 +139,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   elements             :: DB.ConnectionPool                   -> PanelM c [PS c]
   renderers            ::                                        PanelM c [PS c -> String]
   panelIdM             ::                                        PanelM c PanelId
+  putElement           :: c -> TreeIter -> LS c -> [PS c -> String] -> [Entry] -> IO ()
 
   -- | A Template Method pattern (it is implemented once for all instances) that
   -- initializes all the panel widgets, including connection with persistent model and
@@ -151,7 +151,6 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   setSelectorRenderers _ _   = return ()
   setSelectorSorting   _ _ _ = return ()
   setSelectorSearching _ _ _ = return ()
-  putElement           _ _ _ _ _ = return ()
   panel   c    = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
   chooser c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_Tb")
   newTb        = getGladeObject castToToggleButton "_newTb"
@@ -166,6 +165,9 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   renderers    = return []
   panelIdM     = do { c <- controller; return (panelId c) }
   mkController = mkControllerImpl -- Implemented as a top-level function
+  putElement _ iter ls renderers_ entries = do
+    entity <- treeModelGetRow ls iter
+    forM_ (zip entries renderers_) $ \(e, r) -> set e [entryText := r entity]
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> PanelM c b
 getGladeObject cast name = do
@@ -213,11 +215,13 @@ instance Controller BillingConceptsController where
                      , priceToString . (^. vatRatio)   . DB.entityVal
                      , priceToString . (^. finalPrice) . DB.entityVal
                      ]
+  editEntries = do e1 <- getGladeObject castToEntry "_EE_longNameEn"
+                   e2 <- getGladeObject castToEntry "_EE_shortNameEn"
+                   e3 <- getGladeObject castToEntry "_EE_basePriceEn"
+                   e4 <- getGladeObject castToEntry "_EE_vatRatioEn"
+                   e5 <- getGladeObject castToEntry "_EE_finalPriceEn"
+                   return [e1, e2, e3, e4, e5]
   connectSelector s sm f = connectTreeView s sm f
-  putElement _ iter ls renderers_ editEntries_ = do
-    entity <- treeModelGetRow ls iter
-    return ()
-    --mapM (\entry txt -> set entry [entryText := txt]) editEntries_ <*> map ($ entity) renderers_
 
 data DebtorsController = DE PanelId Builder
 
