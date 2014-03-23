@@ -240,6 +240,9 @@ instance Controller DebtorsController where
   renderers  = return [ T.unpack      . (^. lastName)   . DB.entityVal
                       , T.unpack      . (^. firstName)  . DB.entityVal
                       ]
+  editEntries = do e1 <- getGladeObject castToEntry "_EE_lastNameEn"
+                   e2 <- getGladeObject castToEntry "_EE_firstNameEn"
+                   return [e1, e2]
   connectSelector s sm f = connectTreeView s sm f
 
 setTreeViewRenderers :: Controller c => TreeView -> LS c -> PanelM c ()
