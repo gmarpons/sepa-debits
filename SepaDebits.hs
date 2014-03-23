@@ -204,10 +204,10 @@ instance Controller BillingConceptsController where
   type E BillingConceptsController = BillingConcept
   type S BillingConceptsController = TreeView
   data D BillingConceptsController =
-    D { longNameD    :: T.Text
-      , shortNameD   :: T.Text
-      , basePriceD   :: Maybe Int
-      , vatRatioD    :: Maybe Int }
+    DBC { longNameD    :: T.Text
+        , shortNameD   :: T.Text
+        , basePriceD   :: Maybe Int
+        , vatRatioD    :: Maybe Int }
   builder  (BC _        builder_) = builder_
   panelId  (BC panelId_ _       ) = panelId_
   selector = getGladeObject castToTreeView "_Tv"
@@ -234,11 +234,11 @@ instance Controller BillingConceptsController where
     shortName_   <- get shortNameEn   entryText
     basePrice_   <- get basePriceEn   entryText
     vatRatio_    <- get vatRatioEn    entryText
-    return D { longNameD   = T.pack longName_
-             , shortNameD  = T.pack shortName_
-             , basePriceD  = Just (stringToPrice basePrice_)
-             , vatRatioD   = Just (stringToPrice vatRatio_)
-             }
+    return DBC { longNameD   = T.pack longName_
+               , shortNameD  = T.pack shortName_
+               , basePriceD  = Just (stringToPrice basePrice_)
+               , vatRatioD   = Just (stringToPrice vatRatio_)
+               }
   readData _ _ = error "readData (BC): wrong number of entries"
   validData _ d = do
     return $ validBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
@@ -249,6 +249,9 @@ data DebtorsController = DE PanelId Builder
 instance Controller DebtorsController where
   type E DebtorsController = Debtor
   type S DebtorsController = TreeView
+  data D DebtorsController =
+    DDE { lastNameD  :: T.Text
+        , firstNameD :: T.Text }
   builder  (DE _        builder_) = builder_
   panelId  (DE panelId_ _       ) = panelId_
   selector = getGladeObject castToTreeView "_Tv"
@@ -264,6 +267,15 @@ instance Controller DebtorsController where
   editEntries = do e1 <- getGladeObject castToEntry "_EE_lastNameEn"
                    e2 <- getGladeObject castToEntry "_EE_firstNameEn"
                    return [e1, e2]
+  readData _ [lastNameEn, firstNameEn] = do
+    lastName_    <- get lastNameEn    entryText
+    firstName_   <- get firstNameEn   entryText
+    return DDE { lastNameD   = T.pack lastName_
+               , firstNameD  = T.pack firstName_
+               }
+  readData _ _ = error "readData (DE): wrong number of entries"
+  validData _ d = do
+    return $ validDebtorName (firstNameD d) (lastNameD d)
   connectSelector s sm f = connectTreeView s sm f
 
 setTreeViewRenderers :: Controller c => TreeView -> LS c -> PanelM c ()

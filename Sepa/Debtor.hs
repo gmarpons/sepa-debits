@@ -1,10 +1,8 @@
-{-# LANGUAGE
-  GADTs,
-  NoImplicitPrelude,
-  OverloadedStrings,
-  TemplateHaskell,
-  TypeFamilies
-  #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Sepa.Debtor
        ( -- Debtor
@@ -39,17 +37,14 @@ module Sepa.Debtor
        ) where
 
 import           ClassyPrelude
-import           Control.Lens
-  (Conjoined, Gettable,
-   (^.), to)
-import qualified Data.Char                                                      as CH
-  (isDigit, isUpper)
-import qualified Data.List                                                      as LT
-import qualified Data.Time.Calendar                                             as T
-import qualified Database.Persist.Quasi                                         as DB
-  (upperCaseSettings)
-import qualified Database.Persist.TH                                            as DB
-  (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
+import           Control.Lens           (Conjoined, Gettable, to, (^.))
+import qualified Data.Char              as CH (isDigit, isUpper)
+import qualified Data.List              as LT
+import qualified Data.Time.Calendar     as T
+import qualified Database.Persist.Quasi as DB (upperCaseSettings)
+import qualified Database.Persist.TH    as DB (mkPersist, mpsGenerateLenses,
+                                               mpsPrefixFields, persistFileWith,
+                                               share)
 import           Sepa.MongoSettings
 import           Sepa.SpanishIban
 
@@ -81,7 +76,6 @@ validDebtorName firstName_ lastName_ =
   where maxLengthFirstName = 40
         maxLengthLastName  = 60
         maxLengthFullName  = 68 -- SEPA constraint (2.72) is 70, keep room for ", "
-
 
 -- | We want mandates ordered from more recent to oldest.
 validMandateList :: [Mandate] -> Bool
