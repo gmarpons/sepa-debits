@@ -16,7 +16,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
 import           Data.List
-import qualified Data.Text                as T (Text, pack, replace, unpack)
+import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
 import qualified Data.Text.Lazy           as TL (unpack)
 import qualified Data.Time.Clock          as C (NominalDiffTime)
 import qualified Data.Time.Calendar       as C
@@ -109,6 +109,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   -- | Type of the selector widget (e.g. TreeView or ComboBox).
   type S c
 
+  -- | Type for raw data taken from entries, representing an entity of type E c.
   data D c
 
   -- All instances need to implement, at least, the following functions
@@ -123,7 +124,6 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
 
   -- The following functions may be re-implemented, default instance implementation does
   -- nothing
-  -- FIXME: I've needed a c param in putElement to fix its type
   setSelectorRenderers ::                            S c -> LS c       -> PanelM c ()
   setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm -> PanelM c ()
   setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm -> PanelM c ()
@@ -132,6 +132,8 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   selectWidgets        ::                                        PanelM c [Widget]
   renderers            ::                                        PanelM c [PS c -> String]
 
+  -- FIXME: I've needed a c param in putElement and other functions to fix their type (as
+  -- they are not in the monad PanelM).
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
   panel                :: c -> IO VBox
@@ -235,8 +237,8 @@ instance Controller BillingConceptsController where
     shortName_   <- get shortNameEn   entryText
     basePrice_   <- get basePriceEn   entryText
     vatRatio_    <- get vatRatioEn    entryText
-    return DBC { longNameD   = T.pack longName_
-               , shortNameD  = T.pack shortName_
+    return DBC { longNameD   = T.strip (T.pack longName_)
+               , shortNameD  = T.strip (T.pack shortName_)
                , basePriceD  = Just (stringToPrice basePrice_)
                , vatRatioD   = Just (stringToPrice vatRatio_)
                }
@@ -535,6 +537,7 @@ mkControllerImpl db setMainWdState = do
   return ()
 
 -- TODO: Merge this function with BC.priceToText
+-- | We pad with spaces, to correct show prices in right-aligned columns.
 priceToString :: Int -> String
 priceToString num = TL.unpack $ format (left padding ' ') (toText num)
   where
@@ -544,14 +547,16 @@ priceToString num = TL.unpack $ format (left padding ' ') (toText num)
 
 -- TODO: set signal on all numeric entries to guarantee only valid chars
 
--- | Pre: str contains only isNumeric or ',' (or spaces that we trim).
+-- | Pre: @str@ contains a decimal number with a maximum of two digits fractional parts
+-- (possibly surrounded by blanks, that @read@ ignores).
+-- Post: the result is the number represented by @str@ multiplied by 100.
 stringToPrice :: String -> Int
 stringToPrice str =
-  let (integer, fractional') = break (== separator) $ dropWhile (==' ') str
+  let (integer, fractional') = break (== separator) str
       separator = ','           -- FIXME: Take separator from locale
       fractional = case fractional' of
-        []             -> "00"
-        _ : []         -> "00"
+        []             -> "00"  -- Case no separator is used, no fractional part
+        _ : []         -> "00"  -- Void fractional part
         _ : x : []     -> x : "0"
         _ : x : y : [] -> x : [y]
         _              -> error "stringToPrice: Too long fractional part"
