@@ -1078,6 +1078,36 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-cancel</property>
   </object>
+  <object class="GtkMessageDialog" id="cannotQuitDg">
+    <property name="can_focus">False</property>
+    <property name="border_width">5</property>
+    <property name="type">popup</property>
+    <property name="resizable">False</property>
+    <property name="modal">True</property>
+    <property name="type_hint">dialog</property>
+    <property name="skip_taskbar_hint">True</property>
+    <property name="transient_for">mainWd</property>
+    <property name="buttons">ok</property>
+    <property name="text" translatable="yes">No es pot tancar l'aplicació sense guardar les dades.</property>
+    <child internal-child="vbox">
+      <object class="GtkBox" id="messagedialog-vbox">
+        <property name="can_focus">False</property>
+        <property name="orientation">vertical</property>
+        <child internal-child="action_area">
+          <object class="GtkButtonBox" id="messagedialog-action_area">
+            <property name="can_focus">False</property>
+            <property name="layout_style">end</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="pack_type">end</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
   <object class="GtkImage" id="deleteBillingConceptIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
@@ -1877,6 +1907,38 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-print</property>
+  </object>
+  <object class="GtkMessageDialog" id="quitDg">
+    <property name="can_focus">False</property>
+    <property name="border_width">5</property>
+    <property name="type">popup</property>
+    <property name="resizable">False</property>
+    <property name="modal">True</property>
+    <property name="type_hint">dialog</property>
+    <property name="skip_taskbar_hint">True</property>
+    <property name="transient_for">mainWd</property>
+    <property name="message_type">question</property>
+    <property name="buttons">ok-cancel</property>
+    <property name="text" translatable="yes">Segur que vols sortir?</property>
+    <child internal-child="vbox">
+      <object class="GtkBox" id="messagedialog-vbox1">
+        <property name="can_focus">False</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">2</property>
+        <child internal-child="action_area">
+          <object class="GtkButtonBox" id="messagedialog-action_area1">
+            <property name="can_focus">False</property>
+            <property name="layout_style">end</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="pack_type">end</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+      </object>
+    </child>
   </object>
   <object class="GtkImage" id="removeChargeIcon">
     <property name="visible">True</property>

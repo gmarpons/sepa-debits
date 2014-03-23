@@ -366,6 +366,8 @@ mkMainWindowGui builder_ db = do
   mainWd            <- builderGetObject builder_ castToWindow "mainWd"
   mwExitBt          <- builderGetObject builder_ castToButton "mwExitBt"
   mainVb            <- builderGetObject builder_ castToVBox   "mainVb"
+  cannotQuitDg      <- builderGetObject builder_ castToDialog "cannotQuitDg"
+  quitDg            <- builderGetObject builder_ castToDialog "quitDg"
 
   -- Place main window initial state in an IORef
 
@@ -395,9 +397,25 @@ mkMainWindowGui builder_ db = do
 
   -- Connect signals
 
-  _ <- on mwExitBt buttonActivated $ widgetDestroy mainWd >> mainQuit
+  _ <- on mwExitBt buttonActivated $ do
+    resp <- dialogRun quitDg
+    widgetHide quitDg
+    when (resp == ResponseOk) $ do
+      widgetDestroy quitDg
+      widgetDestroy mainWd
+      mainQuit
 
-  _ <- on mainWd objectDestroy mainQuit -- FIXME: don't exit if dirty state
+  _ <- on mainWd deleteEvent $ liftIO $ do
+    st <- readIORef stRef
+    case st of
+      View _ -> do resp <- dialogRun quitDg
+                   widgetHide quitDg
+                   return $ resp /= ResponseOk
+      Edit _ -> do _ <- dialogRun cannotQuitDg
+                   widgetHide cannotQuitDg
+                   return True
+
+  _ <- on mainWd objectDestroy mainQuit
 
   forM_ choosers $ \chs -> on chs toggled $ do
     -- If button can be toggled then it was active, and its panel selected
