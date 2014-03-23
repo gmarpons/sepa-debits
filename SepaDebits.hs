@@ -64,7 +64,7 @@ main = do
   mainGUI
     where
       gladeFile  = "glade/SepaDebits.glade"
-      dbName     = "test" :: DB.Database
+      dbName     = "sepadebits" :: DB.Database
       hostName   = "localhost" :: DB.HostName
       port       = N.PortNumber 27017 :: N.PortID -- Standard MongoDB port
       poolSize   = 10                             -- Num. of stripes
