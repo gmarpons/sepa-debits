@@ -21,22 +21,11 @@ import qualified Data.Time.Clock          as C (NominalDiffTime)
 import qualified Data.Time.Calendar       as C
 import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
-import qualified Database.Persist.Types   as DB
 import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import qualified Network                  as N (PortID (PortNumber))
 import           Sepa.BillingConcept
 import           Sepa.Debtor
-
--- -- | I assume that the elements in this record have their own state (e.g. through IORef's
--- -- or MVar's), so they can be used in callbacks.
--- data AppData
---   = AppData
---     { _builder :: Builder
---     , _db      :: DB.ConnectionPool
---     }
-
--- makeLenses ''AppData
 
 type PanelId = String
 
@@ -134,7 +123,10 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   editEntries          ::                                        PanelM c [Entry]
   editWidgets          ::                                        PanelM c [Widget]
   selectWidgets        ::                                        PanelM c [Widget]
+  subElemWidgets       ::                                        PanelM c [Widget]
   renderers            ::                                        PanelM c [PS c -> String]
+  putSubElement        :: c -> TreeIter -> LS c                                 -> IO ()
+  mkSubElemController  :: (TreeModelSortClass sm) => c -> LS c -> sm -> DB.ConnectionPool -> IORef (PanelState c) -> IO ()
 
   -- FIXME: I've needed a c param in putElement and other functions to fix their type (as
   -- they are not in the monad PanelM).
@@ -168,7 +160,10 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   editEntries                = return []
   editWidgets                = return []
   selectWidgets              = return []
+  subElemWidgets             = return []
   renderers                  = return []
+  putSubElement _ _ _        = return ()
+  mkSubElemController _ _ _ _ _ = return ()
   panel   c    = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
   chooser c    = builderGetObject (builder c) castToToggleButton (panelId c ++ "_Tb")
   newTb        = getGladeObject castToToggleButton "_newTb"
@@ -181,9 +176,10 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
     liftIO $ builderGetObject (builder c) castToDialog "deleteDg"
   elements db  = liftIO $ flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter (E c)]) []
   panelIdM     = do { c <- controller; return (panelId c) }
-  putElement _ iter ls renderers_ entries = do
+  putElement c iter ls renderers_ entries = do
     entity <- treeModelGetRow ls iter
     forM_ (zip entries renderers_) $ \(e, r) -> set e [entryText := r entity]
+    putSubElement c iter ls
   deleteElement _ iter ls db = do
     entity <- treeModelGetRow ls iter
     flip DB.runMongoDBPoolDef db $ DB.delete (DB.entityKey entity)
@@ -307,6 +303,22 @@ instance Controller DebtorsController where
   editEntries = do e1 <- getGladeObject castToEntry "_EE_lastNameEn"
                    e2 <- getGladeObject castToEntry "_EE_firstNameEn"
                    return [e1, e2]
+  subElemWidgets = do
+    s1  <- getGladeObject castToWidget "_iban1En"
+    s2  <- getGladeObject castToWidget "_iban2En"
+    s3  <- getGladeObject castToWidget "_iban3En"
+    s4  <- getGladeObject castToWidget "_iban4En"
+    s5  <- getGladeObject castToWidget "_iban5En"
+    s6  <- getGladeObject castToWidget "_iban6En"
+    s7  <- getGladeObject castToWidget "_mandateNewTb"
+    s8  <- getGladeObject castToWidget "_mandateRefEn"
+    s9  <- getGladeObject castToWidget "_mandateSignatureEn"
+    s10 <- getGladeObject castToWidget "_mandateLastTimeActiveEn"
+    s11 <- getGladeObject castToWidget "_saveMandateBt"
+    s12 <- getGladeObject castToWidget "_cancelMandateBt"
+    s13 <- getGladeObject castToWidget "_mandateFormBt"
+    s14 <- getGladeObject castToWidget "_mandatesTv"
+    return [s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14]
   readData _ [lastNameEn, firstNameEn] = do
     lastName_    <- get lastNameEn    entryText
     firstName_   <- get firstNameEn   entryText
@@ -322,6 +334,8 @@ instance Controller DebtorsController where
   updateFromData _ d old =
     return $ old & firstName .~ (firstNameD d) & lastName .~ (lastNameD d)
   selectElement = selectTreeViewElement
+  putSubElement = putMandate
+  mkSubElemController = mkMandateController
   connectSelector s sm f = connectTreeView s sm f
 
 selectTreeViewElement ::  (TreeModelSortClass sm) => c -> TreeIter -> TreeView -> sm -> IO ()
@@ -520,6 +534,7 @@ mkControllerImpl db setMainWdState = do
   editWidgets_   <- editWidgets
   selectWidgets_ <- selectWidgets
   deleteDg_      <- deleteDg
+  subElemWidgets_<- subElemWidgets
 
   -- Place panel initial state in an IORef
 
@@ -531,6 +546,7 @@ mkControllerImpl db setMainWdState = do
         forM_ editEntries_                    (`set` [widgetSensitive    := False, entryText := ""])
         forM_ editWidgets_                    (`set` [widgetSensitive    := False])
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
+        forM_ subElemWidgets_                 (`set` [widgetSensitive    := False])
         forM_ [deleteBt_, saveBt_, cancelBt_] (`set` [widgetSensitive    := False])
         forM_ [editTb_]                       (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := True ])
@@ -543,6 +559,7 @@ mkControllerImpl db setMainWdState = do
         forM_ editWidgets_                    (`set` [widgetSensitive    := False])
         forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
         forM_ selectWidgets_                  (`set` [widgetSensitive    := True ])
+        forM_ subElemWidgets_                 (`set` [widgetSensitive    := True ])
         forM_ [selector_]                     (`set` [widgetSensitive    := True ])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := True ])
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := True ])
@@ -550,6 +567,7 @@ mkControllerImpl db setMainWdState = do
         setMainWdState (View panelId_)
       setState' (EditNew _iter valid) = do
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
+        forM_ subElemWidgets_                 (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := False])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
@@ -560,6 +578,7 @@ mkControllerImpl db setMainWdState = do
         setMainWdState (Edit panelId_)
       setState' (EditOld _iter valid) = do
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
+        forM_ subElemWidgets_                 (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := False])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
@@ -621,14 +640,101 @@ mkControllerImpl db setMainWdState = do
     setState (Sel iter)
 
   -- Change state if validation state changes (check at every edit)
-  forM_ editEntries_ $ \entry -> liftIO $ on entry editableChanged $ do
-    st'    <- readIORef stRef
-    d      <- readData c editEntries_
-    v      <- validData c d
-    case (st', v) of
-      (EditNew s vOld, vNew) | vNew /= vOld -> setState (EditNew s vNew)
-      (EditOld i vOld, vNew) | vNew /= vOld -> setState (EditOld i vNew)
-      _                                     -> return ()
+  -- forM_ editEntries_ $ \entry -> liftIO $ on entry editableChanged $ do
+  --   st'    <- readIORef stRef
+  --   d      <- readData c editEntries_
+  --   v      <- validData c d
+  --   case (st', v) of
+  --     (EditNew s vOld, vNew) | vNew /= vOld -> setState (EditNew s vNew)
+  --     (EditOld i vOld, vNew) | vNew /= vOld -> setState (EditOld i vNew)
+  --     _                                     -> return ()
+
+  liftIO $ mkSubElemController c ls sm db stRef
+
+  return ()
+
+putMandate :: DebtorsController -> TreeIter -> LS DebtorsController -> IO ()
+putMandate c iter ls = do
+  iban1En   <- builderGetObject (builder c) castToEntry "DE_iban1En"
+  iban2En   <- builderGetObject (builder c) castToEntry "DE_iban2En"
+  iban3En   <- builderGetObject (builder c) castToEntry "DE_iban3En"
+  iban4En   <- builderGetObject (builder c) castToEntry "DE_iban4En"
+  iban5En   <- builderGetObject (builder c) castToEntry "DE_iban5En"
+  iban6En   <- builderGetObject (builder c) castToEntry "DE_iban6En"
+  newTb_   <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
+  saveBt_   <- builderGetObject (builder c) castToButton "DE_saveMandateBt"
+  cancelBt_   <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
+  refEn            <- builderGetObject (builder c) castToEntry "DE_mandateRefEn"
+  signatureEn      <- builderGetObject (builder c) castToEntry "DE_mandateSignatureEn"
+  lastTimeActiveEn <- builderGetObject (builder c) castToEntry "DE_mandateLastTimeActiveEn"
+  mapM_ (`set` [entryText := ""])
+    [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En, refEn, signatureEn, lastTimeActiveEn]
+  set newTb_ [widgetSensitive := True]
+  set saveBt_ [widgetSensitive := False]
+  set cancelBt_ [widgetSensitive := False]
+  (DB.Entity _key debtor)  <- treeModelGetRow ls iter
+  print $ length (debtor ^. mandates)
+  zonedTime <- C.getZonedTime
+  let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
+  case getActiveMandate today debtor of
+    Nothing -> putStrLn "Rien"
+    Just mandate -> do
+      set refEn          [entryText := T.unpack (mandate ^. mandateRef)]
+      set signatureEn    [entryText := C.showGregorian (mandate ^. signatureDate)]
+      set lastTimeActiveEn [entryText := maybe "" C.showGregorian (mandate ^. lastTimeActive)]
+      let (iban1, iban'    ) = splitAt 4 (T.unpack (mandate ^. iban))
+          (iban2, iban''   ) = splitAt 4 iban'
+          (iban3, iban'''  ) = splitAt 4 iban''
+          (iban4, iban'''' ) = splitAt 4 iban'''
+          (iban5, iban6    ) = splitAt 4 iban''''
+      set iban1En [entryText := iban1]
+      set iban2En [entryText := iban2]
+      set iban3En [entryText := iban3]
+      set iban4En [entryText := iban4]
+      set iban5En [entryText := iban5]
+      set iban6En [entryText := iban6]
+
+mkMandateController  :: (TreeModelSortClass sm) => DebtorsController -> LS DebtorsController -> sm -> DB.ConnectionPool -> IORef (PanelState c) -> IO ()
+mkMandateController c ls sm db stRef = do
+  iban1En   <- builderGetObject (builder c) castToEntry "DE_iban1En"
+  iban2En   <- builderGetObject (builder c) castToEntry "DE_iban2En"
+  iban3En   <- builderGetObject (builder c) castToEntry "DE_iban3En"
+  iban4En   <- builderGetObject (builder c) castToEntry "DE_iban4En"
+  iban5En   <- builderGetObject (builder c) castToEntry "DE_iban5En"
+  iban6En   <- builderGetObject (builder c) castToEntry "DE_iban6En"
+  newTb_   <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
+  saveBt_   <- builderGetObject (builder c) castToButton "DE_saveMandateBt"
+  cancelBt_   <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
+  refEn            <- builderGetObject (builder c) castToEntry "DE_mandateRefEn"
+  signatureEn      <- builderGetObject (builder c) castToEntry "DE_mandateSignatureEn"
+  lastTimeActiveEn <- builderGetObject (builder c) castToEntry "DE_mandateLastTimeActiveEn"
+  zonedTime <- C.getZonedTime
+  let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
+
+  _ <- on newTb_ toggled $ do
+    mapM_ (`set` [entryText := ""])
+      [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En, refEn, signatureEn, lastTimeActiveEn]
+    set newTb_ [widgetSensitive := False]
+    set saveBt_ [widgetSensitive := True]
+    set cancelBt_ [widgetSensitive := True]
+--    (Sel iter) <- readIORef stRef -- WARNING: unsafe pattern
+
+  _ <- on saveBt_ buttonActivated $ do
+    (Sel iter) <- readIORef stRef -- WARNING: unsafe pattern
+    (DB.Entity key oldDebtor)  <- treeModelGetRow ls iter
+    iban1 <- get iban1En entryText
+    iban2 <- get iban2En entryText
+    iban3 <- get iban3En entryText
+    iban4 <- get iban4En entryText
+    iban5 <- get iban5En entryText
+    iban6 <- get iban6En entryText
+    ref   <- get refEn   entryText
+    let mandate = mkMandate (T.pack ref) (T.pack (iban1++iban2++iban3++iban4++iban5++iban6)) today Nothing
+        mandates_ = oldDebtor ^. mandates
+        newDebtor = oldDebtor & mandates .~ (mandate : mandates_)
+    flip DB.runMongoDBPoolDef db $ DB.replace key newDebtor
+    let index = listStoreIterToIndex iter
+    listStoreSetValue ls index (DB.Entity key newDebtor)
 
   return ()
 

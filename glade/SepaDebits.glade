@@ -1608,7 +1608,7 @@
                                         <property name="spacing">10</property>
                                         <property name="layout_style">start</property>
                                         <child>
-                                          <object class="GtkButton" id="DE_mandateNewBt">
+                                          <object class="GtkToggleButton" id="DE_mandateNewTb">
                                             <property name="label" translatable="yes">Nou mandat</property>
                                             <property name="use_action_appearance">False</property>
                                             <property name="visible">True</property>
@@ -1852,7 +1852,6 @@
                                                   <object class="GtkEntry" id="DE_mandateRefEn">
                                                     <property name="visible">True</property>
                                                     <property name="can_focus">True</property>
-                                                    <property name="editable">False</property>
                                                     <property name="invisible_char">●</property>
                                                     <property name="width_chars">35</property>
                                                     <property name="invisible_char_set">True</property>
