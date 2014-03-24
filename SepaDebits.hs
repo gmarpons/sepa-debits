@@ -3,7 +3,6 @@
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TemplateHaskell           #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
 
@@ -11,7 +10,7 @@ module Main
        ( main
        ) where
 
-import           Control.Lens             hiding (element, elements, set, view)
+import           Control.Lens             hiding (element, elements, index, set, view)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
@@ -20,7 +19,9 @@ import qualified Data.Text                as T (Text, pack, replace, strip, unpa
 import qualified Data.Text.Lazy           as TL (unpack)
 import qualified Data.Time.Clock          as C (NominalDiffTime)
 import qualified Data.Time.Calendar       as C
+import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
+import qualified Database.Persist.Types   as DB
 import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import qualified Network                  as N (PortID (PortNumber))
@@ -119,8 +120,11 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   setSelectorModel     :: (TreeModelClass m)      => S c         -> m        -> PanelM c ()
   connectSelector      :: (TreeModelSortClass sm) => S c         -> sm
                        -> (PanelState c -> IO ()) -> PanelM c (IO ())
-  readData          :: c                                         -> [Entry] -> IO (D c)
+  readData             :: c                                      -> [Entry] -> IO (D c)
   validData            :: c -> D c                                          -> IO Bool
+  createFromData       :: c -> D c                                          -> IO (E c)
+  updateFromData       :: c -> D c -> E c                                   -> IO (E c)
+  selectElement        :: (TreeModelSortClass sm) => c -> TreeIter -> S c -> sm -> IO ()
 
   -- The following functions may be re-implemented, default instance implementation does
   -- nothing
@@ -143,9 +147,13 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   deleteBt             ::                                        PanelM c Button
   saveBt               ::                                        PanelM c Button
   cancelBt             ::                                        PanelM c Button
+  deleteDg             ::                                        PanelM c Dialog
   elements             :: DB.ConnectionPool                   -> PanelM c [PS c]
   panelIdM             ::                                        PanelM c PanelId
-  putElement           :: c -> TreeIter -> LS c -> [PS c -> String] -> [Entry] -> IO ()
+  putElement           :: c -> TreeIter -> LS c -> [PS c -> String]  -> [Entry] -> IO ()
+  deleteElement        :: c -> TreeIter -> LS c -> DB.ConnectionPool            -> IO ()
+  insertElement        :: c             -> LS c -> DB.ConnectionPool -> [Entry] -> IO TreeIter
+  updateElement        :: c -> TreeIter -> LS c -> DB.ConnectionPool -> [Entry] -> IO TreeIter
 
   -- | A Template Method pattern (it is implemented once for all instances) that
   -- initializes all the panel widgets, including connection with persistent model and
@@ -168,11 +176,35 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   deleteBt     = getGladeObject castToButton       "_deleteBt"
   saveBt       = getGladeObject castToButton       "_saveBt"
   cancelBt     = getGladeObject castToButton       "_cancelBt"
+  deleteDg     = do
+    c <- controller
+    liftIO $ builderGetObject (builder c) castToDialog "deleteDg"
   elements db  = liftIO $ flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter (E c)]) []
   panelIdM     = do { c <- controller; return (panelId c) }
   putElement _ iter ls renderers_ entries = do
     entity <- treeModelGetRow ls iter
     forM_ (zip entries renderers_) $ \(e, r) -> set e [entryText := r entity]
+  deleteElement _ iter ls db = do
+    entity <- treeModelGetRow ls iter
+    flip DB.runMongoDBPoolDef db $ DB.delete (DB.entityKey entity)
+    let index = listStoreIterToIndex iter
+    listStoreRemove ls index
+  insertElement c ls db entries = do
+    data_ <- readData c entries   -- Assume data is valid
+    val   <- createFromData c data_
+    key   <- flip DB.runMongoDBPoolDef db $ DB.insert val -- FIXME: check unique constraints
+    index <- listStoreAppend ls (DB.Entity key val)
+    let treePath = stringToTreePath (show index)
+    Just iter <- treeModelGetIter ls treePath
+    return iter
+  updateElement c iter ls db entries = do
+    dataNew <- readData c entries   -- Assume data is valid
+    old     <- treeModelGetRow ls iter
+    new     <- updateFromData c dataNew (DB.entityVal old)
+    flip DB.runMongoDBPoolDef db $ DB.replace (DB.entityKey old) new
+    let index = listStoreIterToIndex iter
+    listStoreSetValue ls index (DB.Entity (DB.entityKey old) new)
+    return iter
   mkController = mkControllerImpl -- Implemented as a top-level function
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> PanelM c b
@@ -245,6 +277,10 @@ instance Controller BillingConceptsController where
   readData _ _ = error "readData (BC): wrong number of entries"
   validData _ d = do
     return $ validBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
+  createFromData _ d =
+    return $ mkBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
+  updateFromData c d _old = createFromData c d
+  selectElement = selectTreeViewElement
   connectSelector s sm f = connectTreeView s sm f
 
 data DebtorsController = DE PanelId Builder
@@ -278,9 +314,21 @@ instance Controller DebtorsController where
                , firstNameD  = T.pack firstName_
                }
   readData _ _ = error "readData (DE): wrong number of entries"
-  validData _ d = do
-    return $ validDebtorName (firstNameD d) (lastNameD d)
+  validData _ d = return $ validDebtorName (firstNameD d) (lastNameD d)
+  createFromData _ d = do
+    zonedTime <- C.getZonedTime
+    let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
+    return $ mkDebtor (firstNameD d) (lastNameD d) [] today
+  updateFromData _ d old =
+    return $ old & firstName .~ (firstNameD d) & lastName .~ (lastNameD d)
+  selectElement = selectTreeViewElement
   connectSelector s sm f = connectTreeView s sm f
+
+selectTreeViewElement ::  (TreeModelSortClass sm) => c -> TreeIter -> TreeView -> sm -> IO ()
+selectTreeViewElement _ iter treeView sortedModel = do
+  sortedIter <- treeModelSortConvertChildIterToIter sortedModel iter
+  selection  <- treeViewGetSelection treeView
+  treeSelectionSelectIter selection sortedIter
 
 setTreeViewRenderers :: Controller c => TreeView -> LS c -> PanelM c ()
 setTreeViewRenderers treeView listStore = do
@@ -445,6 +493,8 @@ mkControllerImpl :: forall c . (Controller c,
                     DB.ConnectionPool -> (MainWindowState -> IO ()) -> PanelM c ()
 mkControllerImpl db setMainWdState = do
 
+  -- FIXME: NoSel -> newTb -> Cannot save
+
   -- We could put most of the variables in the following code (s, e, ls, etc.) under the
   -- monad M, but prefer to show them to make explicit the dependencies among Gtk
   -- operations.
@@ -469,6 +519,7 @@ mkControllerImpl db setMainWdState = do
   editEntries_   <- editEntries
   editWidgets_   <- editWidgets
   selectWidgets_ <- selectWidgets
+  deleteDg_      <- deleteDg
 
   -- Place panel initial state in an IORef
 
@@ -551,6 +602,23 @@ mkControllerImpl db setMainWdState = do
       d <- readData c editEntries_
       v <- validData c d
       setState (EditNew d v)
+
+  _ <- liftIO $ on deleteBt_ buttonActivated $ do
+    (Sel iter) <- readIORef stRef -- FIXME: unsafe pattern
+    resp <- dialogRun deleteDg_
+    widgetHide deleteDg_
+    when (resp == ResponseOk) $ do
+      deleteElement c iter ls db
+      setState NoSel
+
+  _ <- liftIO $ on saveBt_ buttonActivated $ do
+    st' <- readIORef stRef
+    iter <- case st' of
+      EditNew _    True -> insertElement c      ls db editEntries_
+      EditOld iter True -> updateElement c iter ls db editEntries_
+      _                 -> error "mkControllerImpl: Unexpected state when saving"
+    selectElement c iter selector_ sm
+    setState (Sel iter)
 
   return ()
 
