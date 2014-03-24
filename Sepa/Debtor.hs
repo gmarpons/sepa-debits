@@ -99,7 +99,7 @@ getActiveMandate today debtor =
   case debtor ^. mandates of
     (mandate : _) -> case mandate ^. lastTimeActive of
       -- 36 months == 3 years
-      Just lta -> if lta > T.addDays (3 * 365) today then Just mandate else Nothing
+      Just lta -> if T.addDays (3 * 365) lta > today then Just mandate else Nothing
       Nothing  -> Just mandate
     []            -> Nothing    -- No mandates yet
 
