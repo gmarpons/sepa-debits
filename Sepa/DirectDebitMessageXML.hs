@@ -29,7 +29,6 @@ import           Text.XML                  hiding (writeFile)
 import qualified Text.XML.Light.Input      as LXML
 import qualified Text.XML.Light.Output     as LXML
 
-
 -- Type synonims
 
 type BankMap = M.Map Text SpanishBank
@@ -92,7 +91,7 @@ pmtInf_L dds bkM =
   concat $ (pmtInf' True new, pmtInf' False old) ^.. both
   where
     -- Use of lenses and list comprehensions
-    (new, old) = span (^. mandate.isNew) (dds ^.. debits.traverse)
+    (new, old) = partition (^. mandate.isNew) (dds ^.. debits.traverse)
     pmtInf' areNew ddL = [pmtInf areNew ddL dds bkM| not (null ddL)]
 
 pmtInf :: Bool -> [DirectDebit] -> DirectDebitSet -> BankMap ->
