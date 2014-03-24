@@ -620,6 +620,16 @@ mkControllerImpl db setMainWdState = do
     selectElement c iter selector_ sm
     setState (Sel iter)
 
+  -- Change state if validation state changes (check at every edit)
+  forM_ editEntries_ $ \entry -> liftIO $ on entry editableChanged $ do
+    st'    <- readIORef stRef
+    d      <- readData c editEntries_
+    v      <- validData c d
+    case (st', v) of
+      (EditNew s vOld, vNew) | vNew /= vOld -> setState (EditNew s vNew)
+      (EditOld i vOld, vNew) | vNew /= vOld -> setState (EditOld i vNew)
+      _                                     -> return ()
+
   return ()
 
 -- TODO: Merge this function with BC.priceToText
