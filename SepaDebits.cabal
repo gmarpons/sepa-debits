@@ -17,6 +17,9 @@ cabal-version:          >=1.10
 
 library
   exposed-modules:      Sepa.BillingConcept,
+                        Sepa.Controller.BillingConcept,
+                        Sepa.Controller.Class,
+                        Sepa.Controller.Debtor,
                         Sepa.Creditor,
                         Sepa.Debtor,
                         Sepa.DirectDebit,
@@ -58,6 +61,9 @@ library
 executable sepa-debits
   main-is:              SepaDebits.hs
   other-modules:        Sepa.BillingConcept,
+                        Sepa.Controller.BillingConcept,
+                        Sepa.Controller.Class,
+                        Sepa.Controller.Debtor,
                         Sepa.Creditor,
                         Sepa.Debtor,
                         Sepa.DirectDebit,
