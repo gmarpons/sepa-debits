@@ -144,9 +144,9 @@ bPanelId      :: BController -> PanelId
 bBuilder      :: BController -> Builder
 bChooser      :: BController -> IO ToggleButton
 bPanel        :: BController -> IO VBox
+bPanelId      (MkBController c)      = panelId c
+bBuilder      (MkBController c)      = builder c
+bChooser      (MkBController c)      = chooser c
+bPanel        (MkBController c)      = panel   c
 bRunMkController :: BController -> DB.ConnectionPool -> (MainWindowState -> IO ()) -> IO ()
-bPanelId      (MkBController boxed)      = panelId boxed
-bBuilder      (MkBController boxed)      = builder boxed
-bChooser      (MkBController boxed)      = chooser boxed
-bPanel        (MkBController boxed)      = panel   boxed
-bRunMkController (MkBController boxed) db f = runPanel (mkController db f) boxed
+bRunMkController (MkBController c) db f = mkController db f c

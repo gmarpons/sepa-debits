@@ -9,15 +9,9 @@
 module Sepa.Controller.BillingConcept where
 
 import           Control.Lens             hiding (element, elements, index, set, view)
-import           Control.Monad
-import           Control.Monad.IO.Class
-import           Data.IORef
 import           Data.List
 import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
 import qualified Data.Text.Lazy           as TL (unpack)
-import qualified Data.Time.Clock          as C (NominalDiffTime)
-import qualified Data.Time.Calendar       as C
-import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
 import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
@@ -44,9 +38,9 @@ instance Controller BillingConceptsController where
 
   selector = getGladeObject castToTreeView "_Tv"
 
-  setSelectorModel     s m     = liftIO $ treeViewSetModel s m
+  setSelectorModel s m _c = treeViewSetModel s m
 
-  setSelectorRenderers s ls    = setTreeViewRenderers s ls
+  setSelectorRenderers = setTreeViewRenderers
 
   setSelectorSorting   s ls sm = setTreeViewSorting   s ls sm orderings
     where orderings = repeat compare -- TODO: catalan collation
@@ -54,21 +48,21 @@ instance Controller BillingConceptsController where
   setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
     where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
 
-  renderers = return [ T.unpack      . (^. longName)   . DB.entityVal
-                     , T.unpack      . (^. shortName)  . DB.entityVal
-                     , priceToString . (^. basePrice)  . DB.entityVal
-                     , priceToString . (^. vatRatio)   . DB.entityVal
-                     , priceToString . (^. finalPrice) . DB.entityVal
-                     ]
+  renderers _ = return [ T.unpack      . (^. longName)   . DB.entityVal
+                       , T.unpack      . (^. shortName)  . DB.entityVal
+                       , priceToString . (^. basePrice)  . DB.entityVal
+                       , priceToString . (^. vatRatio)   . DB.entityVal
+                       , priceToString . (^. finalPrice) . DB.entityVal
+                       ]
 
-  editEntries = do e1 <- getGladeObject castToEntry "_EE_longNameEn"
-                   e2 <- getGladeObject castToEntry "_EE_shortNameEn"
-                   e3 <- getGladeObject castToEntry "_EE_basePriceEn"
-                   e4 <- getGladeObject castToEntry "_EE_vatRatioEn"
-                   e5 <- getGladeObject castToEntry "_EE_finalPriceEn"
-                   return [e1, e2, e3, e4, e5]
+  editEntries c = do e1 <- getGladeObject castToEntry "_EE_longNameEn"   c
+                     e2 <- getGladeObject castToEntry "_EE_shortNameEn"  c
+                     e3 <- getGladeObject castToEntry "_EE_basePriceEn"  c
+                     e4 <- getGladeObject castToEntry "_EE_vatRatioEn"   c
+                     e5 <- getGladeObject castToEntry "_EE_finalPriceEn" c
+                     return [e1, e2, e3, e4, e5]
 
-  readData _ [longNameEn, shortNameEn, basePriceEn, vatRatioEn, _] = do
+  readData [longNameEn, shortNameEn, basePriceEn, vatRatioEn, _] _ = do
     longName_    <- get longNameEn    entryText
     shortName_   <- get shortNameEn   entryText
     basePrice_   <- get basePriceEn   entryText
@@ -78,20 +72,19 @@ instance Controller BillingConceptsController where
                , basePriceD  = Just (stringToPrice basePrice_)
                , vatRatioD   = Just (stringToPrice vatRatio_)
                }
-
   readData _ _ = error "readData (BC): wrong number of entries"
 
-  validData _ d = do
+  validData d _ =
     return $ validBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
 
-  createFromData _ d =
+  createFromData d _c =
     return $ mkBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
 
-  updateFromData c d _old = createFromData c d
+  updateFromData d _old = createFromData d
 
   selectElement = selectTreeViewElement
 
-  connectSelector s sm f = connectTreeView s sm f
+  connectSelector = connectTreeView
 
 -- TODO: Merge this function with BC.priceToText
 -- | We pad with spaces, to correct show prices in right-aligned columns.

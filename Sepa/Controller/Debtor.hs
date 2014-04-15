@@ -9,17 +9,13 @@
 module Sepa.Controller.Debtor where
 
 import           Control.Lens             hiding (element, elements, index, set, view)
-import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
 import           Data.List
-import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
-import qualified Data.Text.Lazy           as TL (unpack)
-import qualified Data.Time.Clock          as C (NominalDiffTime)
+import qualified Data.Text                as T (Text, pack, unpack)
 import qualified Data.Time.Calendar       as C
 import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
-import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import           Sepa.Controller.Class
 import           Sepa.Debtor
@@ -42,9 +38,9 @@ instance Controller DebtorsController where
 
   selector = getGladeObject castToTreeView "_Tv"
 
-  setSelectorModel     s m     = liftIO $ treeViewSetModel s m
+  setSelectorModel s m _ = liftIO $ treeViewSetModel s m
 
-  setSelectorRenderers s ls    = setTreeViewRenderers s ls
+  setSelectorRenderers = setTreeViewRenderers
 
   setSelectorSorting   s ls sm = setTreeViewSorting   s ls sm orderings
     where orderings = repeat compare -- TODO: catalan collation
@@ -52,33 +48,33 @@ instance Controller DebtorsController where
   setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
     where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
 
-  renderers  = return [ T.unpack        . (^. lastName)          . DB.entityVal
-                      , T.unpack        . (^. firstName)         . DB.entityVal
-                      , C.showGregorian . (^. registrationDate)  . DB.entityVal
-                      ]
+  renderers _ = return [ T.unpack        . (^. lastName)          . DB.entityVal
+                       , T.unpack        . (^. firstName)         . DB.entityVal
+                       , C.showGregorian . (^. registrationDate)  . DB.entityVal
+                       ]
 
-  editEntries = do e1 <- getGladeObject castToEntry "_EE_lastNameEn"
-                   e2 <- getGladeObject castToEntry "_EE_firstNameEn"
-                   return [e1, e2]
+  editEntries c = do e1 <- getGladeObject castToEntry "_EE_lastNameEn"  c
+                     e2 <- getGladeObject castToEntry "_EE_firstNameEn" c
+                     return [e1, e2]
 
-  subElemWidgets = do
-    s1  <- getGladeObject castToWidget "_iban1En"
-    s2  <- getGladeObject castToWidget "_iban2En"
-    s3  <- getGladeObject castToWidget "_iban3En"
-    s4  <- getGladeObject castToWidget "_iban4En"
-    s5  <- getGladeObject castToWidget "_iban5En"
-    s6  <- getGladeObject castToWidget "_iban6En"
-    s7  <- getGladeObject castToWidget "_mandateNewTb"
-    s8  <- getGladeObject castToWidget "_mandateRefEn"
-    s9  <- getGladeObject castToWidget "_mandateSignatureEn"
-    s10 <- getGladeObject castToWidget "_mandateLastTimeActiveEn"
-    s11 <- getGladeObject castToWidget "_saveMandateBt"
-    s12 <- getGladeObject castToWidget "_cancelMandateBt"
-    s13 <- getGladeObject castToWidget "_mandateFormBt"
-    s14 <- getGladeObject castToWidget "_mandatesTv"
+  subElemWidgets c = do
+    s1  <- getGladeObject castToWidget "_iban1En" c
+    s2  <- getGladeObject castToWidget "_iban2En" c
+    s3  <- getGladeObject castToWidget "_iban3En" c
+    s4  <- getGladeObject castToWidget "_iban4En" c
+    s5  <- getGladeObject castToWidget "_iban5En" c
+    s6  <- getGladeObject castToWidget "_iban6En" c
+    s7  <- getGladeObject castToWidget "_mandateNewTb" c
+    s8  <- getGladeObject castToWidget "_mandateRefEn" c
+    s9  <- getGladeObject castToWidget "_mandateSignatureEn" c
+    s10 <- getGladeObject castToWidget "_mandateLastTimeActiveEn" c
+    s11 <- getGladeObject castToWidget "_saveMandateBt" c
+    s12 <- getGladeObject castToWidget "_cancelMandateBt" c
+    s13 <- getGladeObject castToWidget "_mandateFormBt" c
+    s14 <- getGladeObject castToWidget "_mandatesTv" c
     return [s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14]
 
-  readData _ [lastNameEn, firstNameEn] = do
+  readData [lastNameEn, firstNameEn] _ = do
     lastName_    <- get lastNameEn    entryText
     firstName_   <- get firstNameEn   entryText
     return DDE { lastNameD   = T.pack lastName_
@@ -87,15 +83,15 @@ instance Controller DebtorsController where
 
   readData _ _ = error "readData (DE): wrong number of entries"
 
-  validData _ d = return $ validDebtorName (firstNameD d) (lastNameD d)
+  validData d _c = return $ validDebtorName (firstNameD d) (lastNameD d)
 
-  createFromData _ d = do
+  createFromData d _ = do
     zonedTime <- C.getZonedTime
     let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
     return $ mkDebtor (firstNameD d) (lastNameD d) [] today
 
-  updateFromData _ d old =
-    return $ old & firstName .~ (firstNameD d) & lastName .~ (lastNameD d)
+  updateFromData d old _ =
+    return $ old & firstName .~ firstNameD d & lastName .~ lastNameD d
 
   selectElement = selectTreeViewElement
 
@@ -103,19 +99,19 @@ instance Controller DebtorsController where
 
   mkSubElemController = mkMandateController
 
-  connectSelector s sm f = connectTreeView s sm f
+  connectSelector = connectTreeView
 
-putMandate :: DebtorsController -> TreeIter -> LS DebtorsController -> IO ()
-putMandate c iter ls = do
+putMandate :: TreeIter -> LS DebtorsController -> DebtorsController -> IO ()
+putMandate iter ls c = do
   iban1En   <- builderGetObject (builder c) castToEntry "DE_iban1En"
   iban2En   <- builderGetObject (builder c) castToEntry "DE_iban2En"
   iban3En   <- builderGetObject (builder c) castToEntry "DE_iban3En"
   iban4En   <- builderGetObject (builder c) castToEntry "DE_iban4En"
   iban5En   <- builderGetObject (builder c) castToEntry "DE_iban5En"
   iban6En   <- builderGetObject (builder c) castToEntry "DE_iban6En"
-  newTb_   <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
+  newTb_    <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
   saveBt_   <- builderGetObject (builder c) castToButton "DE_saveMandateBt"
-  cancelBt_   <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
+  cancelBt_ <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
   refEn            <- builderGetObject (builder c) castToEntry "DE_mandateRefEn"
   signatureEn      <- builderGetObject (builder c) castToEntry "DE_mandateSignatureEn"
   lastTimeActiveEn <- builderGetObject (builder c) castToEntry "DE_mandateLastTimeActiveEn"
@@ -146,8 +142,14 @@ putMandate c iter ls = do
       set iban5En [entryText := iban5]
       set iban6En [entryText := iban6]
 
-mkMandateController  :: (TreeModelSortClass sm) => DebtorsController -> LS DebtorsController -> sm -> DB.ConnectionPool -> IORef (PanelState c) -> IO ()
-mkMandateController c ls sm db stRef = do
+mkMandateController  :: (TreeModelSortClass sm) =>
+                        LS DebtorsController
+                     -> sm
+                     -> DB.ConnectionPool
+                     -> IORef (PanelState c)
+                     -> DebtorsController
+                     -> IO ()
+mkMandateController ls _sm db stRef c = do
   iban1En   <- builderGetObject (builder c) castToEntry "DE_iban1En"
   iban2En   <- builderGetObject (builder c) castToEntry "DE_iban2En"
   iban3En   <- builderGetObject (builder c) castToEntry "DE_iban3En"
