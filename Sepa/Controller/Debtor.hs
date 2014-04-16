@@ -9,7 +9,6 @@
 module Sepa.Controller.Debtor where
 
 import           Control.Lens             hiding (element, elements, index, set, view)
-import           Control.Monad.IO.Class
 import           Data.IORef
 import           Data.List
 import qualified Data.Text                as T (Text, pack, unpack)
@@ -38,7 +37,7 @@ instance Controller DebtorsController where
 
   selector = getGladeObject castToTreeView "_Tv"
 
-  setSelectorModel s m _ = liftIO $ treeViewSetModel s m
+  setSelectorModel s m _ = treeViewSetModel s m
 
   setSelectorRenderers = setTreeViewRenderers
 

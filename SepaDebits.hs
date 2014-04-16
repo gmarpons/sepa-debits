@@ -20,6 +20,7 @@ import qualified Network                  as N (PortID (PortNumber))
 import           Sepa.Controller.BillingConcept
 import           Sepa.Controller.Class
 import           Sepa.Controller.Debtor
+import           Sepa.Controller.DirectDebit
 
 main :: IO ()
 main = do
@@ -46,6 +47,7 @@ mkMainWindowGui builder_ db = do
 
   let controllers   = [ MkBController (BC "BC" builder_)
                       , MkBController (DE "DE" builder_)
+                      , MkBController (DD "DD" builder_)
                       ] :: [BController]
   choosers          <- mapM bChooser controllers :: IO [ToggleButton]
   panels            <- mapM bPanel controllers   :: IO [VBox]
