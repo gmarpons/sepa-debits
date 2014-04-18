@@ -40,10 +40,14 @@ instance Controller BillingConceptsController where
 
   setSelectorModel s m _c = treeViewSetModel s m
 
-  setSelectorRenderers = setTreeViewRenderers
+  setSelectorRenderers s m c = do
+    renderFuncs <- renderers c
+    setTreeViewRenderers s m renderFuncs
 
-  setSelectorSorting   s ls sm = setTreeViewSorting   s ls sm orderings
-    where orderings = repeat compare -- TODO: catalan collation
+  setSelectorSorting s ls sm c = do
+    let orderings = repeat compare -- TODO: catalan collation
+    renderFuncs <- renderers c
+    setTreeViewSorting s ls sm orderings renderFuncs
 
   setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
     where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching

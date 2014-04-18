@@ -45,10 +45,13 @@ mkMainWindowGui builder_ db = do
 
   -- Create panel controllers and helper lists
 
-  let controllers   = [ MkBController (BC "BC" builder_)
-                      , MkBController (DE "DE" builder_)
-                      , MkBController (DD "DD" builder_)
-                      ] :: [BController]
+  let bcController = BC "BC" builder_
+      deController = DE "DE" builder_
+      ddController = DD "DD" builder_
+      controllers  = [ MkBController bcController
+                     , MkBController deController
+                     , MkBController ddController
+                     ] :: [BController]
   choosers          <- mapM bChooser controllers :: IO [ToggleButton]
   panels            <- mapM bPanel controllers   :: IO [VBox]
   let panelsAL      = zip choosers panels
@@ -129,7 +132,9 @@ mkMainWindowGui builder_ db = do
 
   -- Create controllers for all panels, and return
 
-  mapM_ (\boxed -> bRunMkController boxed db setState) controllers
+  bcLs <- mkController  db setState bcController
+  deLs <- mkController  db setState deController
+  _    <- mkController' db setState ddController bcLs deLs
   return mainWd
 
 -- | Box for heterogeneous collections of @Controller@'s.
@@ -143,12 +148,10 @@ data BController where
 --   selector (MkBController c) = selector c
 
 bPanelId      :: BController -> PanelId
-bBuilder      :: BController -> Builder
 bChooser      :: BController -> IO ToggleButton
 bPanel        :: BController -> IO VBox
 bPanelId      (MkBController c)      = panelId c
-bBuilder      (MkBController c)      = builder c
 bChooser      (MkBController c)      = chooser c
 bPanel        (MkBController c)      = panel   c
-bRunMkController :: BController -> DB.ConnectionPool -> (MainWindowState -> IO ()) -> IO ()
-bRunMkController (MkBController c) db f = mkController db f c
+-- bRunMkController :: BController -> DB.ConnectionPool -> (MainWindowState -> IO ()) -> IO ()
+-- bRunMkController (MkBController c) db f = mkController db f c

@@ -10,6 +10,7 @@ module Sepa.Controller.DirectDebit where
 
 import           Control.Lens             hiding (element, elements, index, set, view)
 import           Data.List
+import           Data.Maybe
 import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
 import qualified Data.Text.Lazy           as TL (unpack)
 import qualified Data.Time.Calendar       as C
@@ -17,8 +18,10 @@ import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
 import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
+import           Sepa.BillingConcept
 import           Sepa.Controller.Class
 import           Sepa.Controller.BillingConcept -- TODO: Drop this dependency (price funcs)
+import           Sepa.Debtor
 import           Sepa.DirectDebit
 
 data DirectDebitsController = DD PanelId Builder
@@ -39,17 +42,18 @@ instance Controller DirectDebitsController where
 
   setSelectorModel s m _c = comboBoxSetModel s (Just m)
 
-  setSelectorRenderers s m c = do
+  setSelectorRenderers comboBox listStore _c = do
     renderer <- cellRendererTextNew
-    cellLayoutPackStart s renderer False
+    cellLayoutPackStart comboBox renderer False
     let renderFunc = T.unpack . (^. description) . DB.entityVal
-    cellLayoutSetAttributes s renderer m (\row -> [cellText := renderFunc row])
+    cellLayoutSetAttributes comboBox renderer listStore (\row -> [cellText := renderFunc row])
 
-  -- setSelectorSorting   s ls sm = setTreeViewSorting   s ls sm orderings
-  --   where orderings = repeat compare -- TODO: catalan collation
-
-  -- setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
-  --   where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
+  setSelectorSorting comboBox listStore sortedModel c = do
+    let renderFunc = T.unpack . (^. description) . DB.entityVal
+    treeSortableSetSortFunc sortedModel 0 $ \xIter yIter -> do
+      xRow <- customStoreGetRow listStore xIter
+      yRow <- customStoreGetRow listStore yIter
+      return $ compare (renderFunc xRow) (renderFunc yRow)
 
   renderers _ = return [ C.showGregorian . C.localDay . C.zonedTimeToLocalTime . (^. creationTime) . DB.entityVal
                        ]
@@ -82,3 +86,44 @@ instance Controller DirectDebitsController where
     _ <- on comboBox changed onSelectionChangedAction
     return onSelectionChangedAction
 
+mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.BillingConcept)),
+                  TreeModelClass (deModel (DB.Entity Sepa.Debtor.Debtor)),
+                  TypedTreeModelClass bcModel, TypedTreeModelClass deModel) =>
+                 DB.ConnectionPool
+              -> (MainWindowState -> IO ())
+              -> DirectDebitsController
+              -> bcModel (DB.Entity Sepa.BillingConcept.BillingConcept)
+              -> deModel (DB.Entity Sepa.Debtor.Debtor)
+              -> IO ()
+mkController' db setMainState c bcLs deLs = do
+  _ <- mkController db setMainState c
+  let orderings = repeat compare -- TODO: catalan collation
+
+  -- billing concepts TreeView
+  bcTv   <- getGladeObject castToTreeView "_billingConceptsTv" c
+  bcSm   <- treeModelSortNewWithModel bcLs
+  let bcRf = [ T.unpack      . (^. longName)   . DB.entityVal
+             , priceToString . (^. basePrice)  . DB.entityVal
+             , priceToString . (^. finalPrice) . DB.entityVal
+             ]
+  treeViewSetModel          bcTv      bcSm
+  setTreeViewRenderers      bcTv bcLs                bcRf
+  setTreeViewSorting        bcTv bcLs bcSm orderings bcRf
+
+  -- debtors TreeView
+  deTv   <- getGladeObject castToTreeView "_debtorsTv" c
+  let deRf = [ T.unpack      . (^. lastName)   . DB.entityVal
+             , T.unpack      . (^. firstName)  . DB.entityVal
+             ]
+  deFm   <- treeModelFilterNew deLs []
+  zonedTime <- C.getZonedTime
+  let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
+  treeModelFilterSetVisibleFunc deFm $ \iter -> do
+    entity <- treeModelGetRow deLs iter
+    return $ isJust (getActiveMandate today (DB.entityVal entity))
+  deSm  <- treeModelSortNewWithModel deFm
+  treeViewSetModel           deTv                  deSm
+  setTreeViewRenderers       deTv deLs                            deRf
+  setFilteredTreeViewSorting deTv deLs (Just deFm) deSm orderings deRf
+
+-- FIXME: use treeModelFilterRefilter every time deLs could have changed

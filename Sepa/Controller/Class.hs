@@ -78,12 +78,11 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   subElemWidgets       ::                                                     c -> IO [Widget]
   renderers            ::                                                     c -> IO [PS c -> String]
   putSubElement        :: TreeIter -> LS c                                 -> c -> IO ()
+  putElement'          :: TreeIter -> LS c                                 -> c -> IO ()
   mkSubElemController  :: (TreeModelSortClass sm) =>
                           LS c -> sm -> DB.ConnectionPool
                        -> IORef (PanelState c)                             -> c -> IO ()
 
-  -- FIXME: I've needed a c param in putElement and other functions to fix their type (as
-  -- they are not in the monad PanelM).
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
   panel                ::                                                     c -> IO VBox
@@ -104,7 +103,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   -- initializes all the panel widgets, including connection with persistent model and
   -- callback events. All the other functions in this class are here only to be called by
   -- @mkController@, except @panelId@, @panel@ and @chooser@.
-  mkController         :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
+  mkController         :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO (LS c)
 
   -- Default implementations for some functions
 
@@ -125,6 +124,8 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   renderers _                   = return []
 
   putSubElement _ _ _           = return ()
+
+  putElement'   _ _ _           = return ()
 
   mkSubElemController _ _ _ _ _ = return ()
 
@@ -150,6 +151,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
     entity <- treeModelGetRow ls iter
     forM_ (zip entries renderers_) $ \(e, r) -> set e [entryText := r entity]
     putSubElement iter ls c
+    putElement'   iter ls c
 
   deleteElement iter ls db _ = do
     entity <- treeModelGetRow ls iter
@@ -179,7 +181,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
 
 mkControllerImpl :: forall c . (Controller c,
                      DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
-                    DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO ()
+                    DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO (LS c)
 mkControllerImpl db setMainWdState c = do
 
   -- FIXME: NoSel -> newTb -> Cannot save
@@ -192,7 +194,8 @@ mkControllerImpl db setMainWdState c = do
   e          <- elements db c
   ls         <- listStoreNew e
   sm         <- treeModelSortNewWithModel ls
-  setSelectorModel     selector_ sm    c
+
+  setSelectorModel     selector_    sm c
   setSelectorRenderers selector_ ls    c
   setSelectorSorting   selector_ ls sm c
   setSelectorSearching selector_ ls sm c
@@ -324,8 +327,7 @@ mkControllerImpl db setMainWdState c = do
   --     _                                     -> return ()
 
   mkSubElemController ls sm db stRef c
-
-  return ()
+  return ls
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> c -> IO b
 getGladeObject cast name c =
@@ -338,9 +340,10 @@ selectTreeViewElement iter treeView sortedModel _c = do
   selection  <- treeViewGetSelection treeView
   treeSelectionSelectIter selection sortedIter
 
-setTreeViewRenderers :: Controller c => TreeView -> LS c -> c -> IO ()
-setTreeViewRenderers treeView listStore c = do
-  renderFuncs <- renderers c
+setTreeViewRenderers :: (TreeViewClass self, TreeModelClass (model row),
+                         TypedTreeModelClass model) =>
+                         self -> model row -> [row -> String] -> IO ()
+setTreeViewRenderers treeView listStore renderFuncs = do
   -- forall columns: set renderer, set sorting func
   columns <- treeViewGetColumns treeView
   forM_ (zip columns renderFuncs) $ \(col, renderFunc) -> do
@@ -350,20 +353,32 @@ setTreeViewRenderers treeView listStore c = do
     let textRenderer = castToCellRendererText cell -- FIXME: unsafe cast, depends on glade
     cellLayoutSetAttributes col textRenderer listStore $ \row -> [ cellText := renderFunc row ]
 
-setTreeViewSorting :: (Controller c, TreeSortableClass sm) =>
-                      TreeView
-                   -> LS c
-                   -> sm
-                   -> [String -> String -> Ordering]
-                   -> c
-                   -> IO ()
-setTreeViewSorting treeView listStore sortedModel orderings c = do
-  renderFuncs <- renderers c
+setTreeViewSorting :: (TreeViewClass self, TreeSortableClass self1,
+                       TypedTreeModelClass model) =>
+                      self -> model t -> self1 -> [t1 -> t1 -> Ordering] -> [t -> t1] -> IO ()
+setTreeViewSorting treeView listStore sortedModel orderings renderFuncs = do
   columns <- treeViewGetColumns treeView
   forM_ (zip4 columns renderFuncs orderings [0..]) $ \(col, renderFunc, ordering, colId) -> do
     let sortFunc xIter yIter = do
           xRow <- customStoreGetRow listStore xIter
           yRow <- customStoreGetRow listStore yIter
+          return $ ordering (renderFunc xRow) (renderFunc yRow)
+    treeSortableSetSortFunc sortedModel colId sortFunc
+    treeViewColumnSetSortColumnId col colId
+  treeSortableSetSortColumnId sortedModel 0 SortAscending
+
+setFilteredTreeViewSorting treeView listStore mFilterModel sortedModel orderings renderFuncs = do
+  columns <- treeViewGetColumns treeView
+  forM_ (zip4 columns renderFuncs orderings [0..]) $ \(col, renderFunc, ordering, colId) -> do
+    let sortFunc xIter yIter = do
+          (xIter', yIter') <- case mFilterModel of
+            Just filterModel -> do
+              childXIter <- treeModelFilterConvertIterToChildIter filterModel xIter
+              childYIter <- treeModelFilterConvertIterToChildIter filterModel yIter
+              return (childXIter, childYIter)
+            Nothing          -> return (xIter, yIter)
+          xRow <- customStoreGetRow listStore xIter'
+          yRow <- customStoreGetRow listStore yIter'
           return $ ordering (renderFunc xRow) (renderFunc yRow)
     treeSortableSetSortFunc sortedModel colId sortFunc
     treeViewColumnSetSortColumnId col colId
@@ -388,10 +403,10 @@ setTreeViewSearching treeView listStore sortedModel isPartOf c = do
 
 connectTreeView :: (Controller c, TreeModelSortClass sm) =>
                    TreeView
-                   -> sm
-                   -> (PanelState c -> IO ())
-                   -> c
-                   -> IO (IO ())
+                -> sm
+                -> (PanelState c -> IO ())
+                -> c
+                -> IO (IO ())
 connectTreeView treeView sortedModel setState _c = do
   selection <- treeViewGetSelection treeView
   let toChildIter = treeModelSortConvertIterToChildIter sortedModel
@@ -399,9 +414,9 @@ connectTreeView treeView sortedModel setState _c = do
         count <- treeSelectionCountSelectedRows selection
         if count == 0
           then setState NoSel
-          else treeSelectionSelectedForeach selection $ \it -> do
-            cIt <- toChildIter it
-            setState (Sel cIt)
+          else treeSelectionSelectedForeach selection $ \iter -> do
+            cIter <- toChildIter iter
+            setState (Sel cIter)
 
   _ <- on selection treeSelectionSelectionChanged onSelectionChangedAction
 
