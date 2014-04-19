@@ -47,7 +47,7 @@ instance Controller BillingConceptsController where
   setSelectorSorting s ls sm c = do
     let orderings = repeat compare -- TODO: catalan collation
     renderFuncs <- renderers c
-    setTreeViewSorting s ls sm orderings renderFuncs
+    setTreeViewSorting s ls Nothing sm orderings renderFuncs
 
   setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
     where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching

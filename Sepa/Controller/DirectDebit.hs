@@ -106,9 +106,9 @@ mkController' db setMainState c bcLs deLs = do
              , priceToString . (^. basePrice)  . DB.entityVal
              , priceToString . (^. finalPrice) . DB.entityVal
              ]
-  treeViewSetModel          bcTv      bcSm
-  setTreeViewRenderers      bcTv bcLs                bcRf
-  setTreeViewSorting        bcTv bcLs bcSm orderings bcRf
+  treeViewSetModel          bcTv              bcSm
+  setTreeViewRenderers      bcTv bcLs                        bcRf
+  setTreeViewSorting        bcTv bcLs Nothing bcSm orderings bcRf
 
   -- debtors TreeView
   deTv   <- getGladeObject castToTreeView "_debtorsTv" c
@@ -124,6 +124,6 @@ mkController' db setMainState c bcLs deLs = do
   deSm  <- treeModelSortNewWithModel deFm
   treeViewSetModel           deTv                  deSm
   setTreeViewRenderers       deTv deLs                            deRf
-  setFilteredTreeViewSorting deTv deLs (Just deFm) deSm orderings deRf
+  setTreeViewSorting         deTv deLs (Just deFm) deSm orderings deRf
 
 -- FIXME: use treeModelFilterRefilter every time deLs could have changed

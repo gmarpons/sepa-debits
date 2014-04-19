@@ -353,21 +353,16 @@ setTreeViewRenderers treeView listStore renderFuncs = do
     let textRenderer = castToCellRendererText cell -- FIXME: unsafe cast, depends on glade
     cellLayoutSetAttributes col textRenderer listStore $ \row -> [ cellText := renderFunc row ]
 
-setTreeViewSorting :: (TreeViewClass self, TreeSortableClass self1,
+setTreeViewSorting :: (TreeViewClass treeview, TreeSortableClass sortable,
                        TypedTreeModelClass model) =>
-                      self -> model t -> self1 -> [t1 -> t1 -> Ordering] -> [t -> t1] -> IO ()
-setTreeViewSorting treeView listStore sortedModel orderings renderFuncs = do
-  columns <- treeViewGetColumns treeView
-  forM_ (zip4 columns renderFuncs orderings [0..]) $ \(col, renderFunc, ordering, colId) -> do
-    let sortFunc xIter yIter = do
-          xRow <- customStoreGetRow listStore xIter
-          yRow <- customStoreGetRow listStore yIter
-          return $ ordering (renderFunc xRow) (renderFunc yRow)
-    treeSortableSetSortFunc sortedModel colId sortFunc
-    treeViewColumnSetSortColumnId col colId
-  treeSortableSetSortColumnId sortedModel 0 SortAscending
-
-setFilteredTreeViewSorting treeView listStore mFilterModel sortedModel orderings renderFuncs = do
+                      treeview
+                   -> model row
+                   -> Maybe (TypedTreeModelFilter row)
+                   -> sortable
+                   -> [t -> t -> Ordering]
+                   -> [row -> t]
+                   -> IO ()
+setTreeViewSorting treeView listStore mFilterModel sortedModel orderings renderFuncs = do
   columns <- treeViewGetColumns treeView
   forM_ (zip4 columns renderFuncs orderings [0..]) $ \(col, renderFunc, ordering, colId) -> do
     let sortFunc xIter yIter = do
