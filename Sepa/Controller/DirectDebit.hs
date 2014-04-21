@@ -9,7 +9,6 @@
 module Sepa.Controller.DirectDebit where
 
 import           Control.Lens             hiding (element, elements, index, set, view)
-import           Data.List
 import           Data.Maybe
 import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
 import qualified Data.Text.Lazy           as TL (unpack)
@@ -19,8 +18,9 @@ import qualified Database.Persist.MongoDB as DB
 import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import           Sepa.BillingConcept
-import           Sepa.Controller.Class
 import           Sepa.Controller.BillingConcept -- TODO: Drop this dependency (price funcs)
+import           Sepa.Controller.Class
+import           Sepa.Controller.TreeView
 import           Sepa.Debtor
 import           Sepa.DirectDebit
 
@@ -127,3 +127,7 @@ mkController' db setMainState c bcLs deLs = do
   setTreeViewSorting         deTv deLs (Just deFm) deSm orderings deRf
 
 -- FIXME: use treeModelFilterRefilter every time deLs could have changed
+
+--   putElement' iter ls c = do
+--     ddsE <- treeModelGetRow ls iter
+--     listStoreNew

@@ -17,6 +17,7 @@ import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
 import           Sepa.Controller.Class
+import           Sepa.Controller.TreeView
 import           Sepa.Debtor
 
 data DebtorsController = DE PanelId Builder
@@ -48,8 +49,10 @@ instance Controller DebtorsController where
     renderFuncs <- renderers c
     setTreeViewSorting s ls Nothing sm orderings renderFuncs
 
-  setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
-    where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
+  setSelectorSearching s ls sm c = do
+    renderFuncs <- renderers c
+    let tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
+    setTreeViewSearching s ls sm isPartOf renderFuncs
 
   renderers _ = return [ T.unpack        . (^. lastName)          . DB.entityVal
                        , T.unpack        . (^. firstName)         . DB.entityVal
@@ -96,13 +99,13 @@ instance Controller DebtorsController where
   updateFromData d old _ =
     return $ old & firstName .~ firstNameD d & lastName .~ lastNameD d
 
-  selectElement = selectTreeViewElement
+  selectElement it s sm _c = selectTreeViewElement it s sm
 
   putSubElement = putMandate
 
   mkSubElemController = mkMandateController
 
-  connectSelector = connectTreeView
+  connectSelector s sm st _c = connectTreeView s sm st
 
 putMandate :: TreeIter -> LS DebtorsController -> DebtorsController -> IO ()
 putMandate iter ls c = do

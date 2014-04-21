@@ -1,16 +1,13 @@
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TypeFamilies              #-}
-{-# LANGUAGE TypeSynonymInstances      #-}
 
 module Sepa.Controller.Class where
 
 import           Control.Monad
 import           Data.IORef
-import           Data.List
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
 
@@ -332,87 +329,3 @@ mkControllerImpl db setMainWdState c = do
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> c -> IO b
 getGladeObject cast name c =
   builderGetObject (builder c) cast (panelId c ++ name)
-
-selectTreeViewElement ::  (Controller c, TreeModelSortClass sm) =>
-                          TreeIter -> TreeView -> sm -> c -> IO ()
-selectTreeViewElement iter treeView sortedModel _c = do
-  sortedIter <- treeModelSortConvertChildIterToIter sortedModel iter
-  selection  <- treeViewGetSelection treeView
-  treeSelectionSelectIter selection sortedIter
-
-setTreeViewRenderers :: (TreeViewClass self, TreeModelClass (model row),
-                         TypedTreeModelClass model) =>
-                         self -> model row -> [row -> String] -> IO ()
-setTreeViewRenderers treeView listStore renderFuncs = do
-  -- forall columns: set renderer, set sorting func
-  columns <- treeViewGetColumns treeView
-  forM_ (zip columns renderFuncs) $ \(col, renderFunc) -> do
-    -- FIXME: column manual resizing doesn't work
-    let cellLayout = toCellLayout col
-    (cell : _) <- cellLayoutGetCells cellLayout    -- FIXME: unsafe pattern, dep. on glade
-    let textRenderer = castToCellRendererText cell -- FIXME: unsafe cast, depends on glade
-    cellLayoutSetAttributes col textRenderer listStore $ \row -> [ cellText := renderFunc row ]
-
-setTreeViewSorting :: (TreeViewClass treeview, TreeSortableClass sortable,
-                       TypedTreeModelClass model) =>
-                      treeview
-                   -> model row
-                   -> Maybe (TypedTreeModelFilter row)
-                   -> sortable
-                   -> [t -> t -> Ordering]
-                   -> [row -> t]
-                   -> IO ()
-setTreeViewSorting treeView listStore mFilterModel sortedModel orderings renderFuncs = do
-  columns <- treeViewGetColumns treeView
-  forM_ (zip4 columns renderFuncs orderings [0..]) $ \(col, renderFunc, ordering, colId) -> do
-    let sortFunc xIter yIter = do
-          (xIter', yIter') <- case mFilterModel of
-            Just filterModel -> do
-              childXIter <- treeModelFilterConvertIterToChildIter filterModel xIter
-              childYIter <- treeModelFilterConvertIterToChildIter filterModel yIter
-              return (childXIter, childYIter)
-            Nothing          -> return (xIter, yIter)
-          xRow <- customStoreGetRow listStore xIter'
-          yRow <- customStoreGetRow listStore yIter'
-          return $ ordering (renderFunc xRow) (renderFunc yRow)
-    treeSortableSetSortFunc sortedModel colId sortFunc
-    treeViewColumnSetSortColumnId col colId
-
--- | Sets incremental search in tree view.
-setTreeViewSearching :: (Controller c, TreeModelSortClass sm) =>
-                        TreeView
-                     -> LS c
-                     -> sm
-                     -> (String -> [String] -> Bool)
-                     -> c
-                     -> IO ()
-setTreeViewSearching treeView listStore sortedModel isPartOf c = do
-  -- TODO: accent-independent search or TreeModelFilter
-  renderFuncs <- renderers c
-  let rowEqualFunc :: (String -> TreeIter -> IO Bool)
-      rowEqualFunc txt iter = do
-        childIter <- treeModelSortConvertIterToChildIter sortedModel iter
-        row <- treeModelGetRow listStore childIter
-        return $ txt `isPartOf` map ($ row) renderFuncs
-  treeViewSetSearchEqualFunc treeView (Just rowEqualFunc)
-
-connectTreeView :: (Controller c, TreeModelSortClass sm) =>
-                   TreeView
-                -> sm
-                -> (PanelState c -> IO ())
-                -> c
-                -> IO (IO ())
-connectTreeView treeView sortedModel setState _c = do
-  selection <- treeViewGetSelection treeView
-  let toChildIter = treeModelSortConvertIterToChildIter sortedModel
-  let onSelectionChangedAction = do
-        count <- treeSelectionCountSelectedRows selection
-        if count == 0
-          then setState NoSel
-          else treeSelectionSelectedForeach selection $ \iter -> do
-            cIter <- toChildIter iter
-            setState (Sel cIter)
-
-  _ <- on selection treeSelectionSelectionChanged onSelectionChangedAction
-
-  return onSelectionChangedAction

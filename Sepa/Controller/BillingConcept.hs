@@ -16,6 +16,7 @@ import qualified Database.Persist.MongoDB as DB
 import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import           Sepa.Controller.Class
+import           Sepa.Controller.TreeView
 import           Sepa.BillingConcept
 
 data BillingConceptsController = BC PanelId Builder
@@ -49,8 +50,10 @@ instance Controller BillingConceptsController where
     renderFuncs <- renderers c
     setTreeViewSorting s ls Nothing sm orderings renderFuncs
 
-  setSelectorSearching s ls sm = setTreeViewSearching s ls sm isPartOf
-    where tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
+  setSelectorSearching s ls sm c = do
+    renderFuncs <- renderers c
+    let tx `isPartOf` txs = any (tx `isInfixOf`) txs -- TODO: better searching
+    setTreeViewSearching s ls sm isPartOf renderFuncs
 
   renderers _ = return [ T.unpack      . (^. longName)   . DB.entityVal
                        , T.unpack      . (^. shortName)  . DB.entityVal
@@ -86,9 +89,9 @@ instance Controller BillingConceptsController where
 
   updateFromData d _old = createFromData d
 
-  selectElement = selectTreeViewElement
+  selectElement it s sm _c = selectTreeViewElement it s sm
 
-  connectSelector = connectTreeView
+  connectSelector s sm st _c = connectTreeView s sm st
 
 -- TODO: Merge this function with BC.priceToText
 -- | We pad with spaces, to correct show prices in right-aligned columns.
