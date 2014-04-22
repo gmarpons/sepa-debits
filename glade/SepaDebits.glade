@@ -713,6 +713,9 @@
                         <property name="vscroll_policy">natural</property>
                         <property name="reorderable">True</property>
                         <property name="rules_hint">True</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection" id="treeview-selection4"/>
+                        </child>
                         <child>
                           <object class="GtkTreeViewColumn" id="treeviewcolumn10">
                             <property name="sizing">autosize</property>
@@ -844,8 +847,56 @@
                       <object class="GtkTreeView" id="DD_itemsTv">
                         <property name="visible">True</property>
                         <property name="can_focus">True</property>
+                        <property name="reorderable">True</property>
                         <child internal-child="selection">
-                          <object class="GtkTreeSelection" id="treeview-selection5"/>
+                          <object class="GtkTreeSelection" id="treeview-selection11"/>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="treeviewcolumn13">
+                            <property name="resizable">True</property>
+                            <property name="sizing">autosize</property>
+                            <property name="title" translatable="yes">Cognoms</property>
+                            <property name="clickable">True</property>
+                            <property name="sort_indicator">True</property>
+                            <property name="sort_column_id">0</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="cellrenderertext14"/>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="treeviewcolumn16">
+                            <property name="resizable">True</property>
+                            <property name="sizing">autosize</property>
+                            <property name="title" translatable="yes">Nom</property>
+                            <property name="sort_column_id">0</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="cellrenderertext17"/>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="treeviewcolumn17">
+                            <property name="resizable">True</property>
+                            <property name="sizing">autosize</property>
+                            <property name="title" translatable="yes">Etiqueta</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="cellrenderertext18"/>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="treeviewcolumn18">
+                            <property name="resizable">True</property>
+                            <property name="sizing">autosize</property>
+                            <property name="title" translatable="yes">Preu base real</property>
+                            <property name="alignment">1</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="cellrenderertext19">
+                                <property name="alignment">right</property>
+                              </object>
+                            </child>
+                          </object>
                         </child>
                       </object>
                     </child>

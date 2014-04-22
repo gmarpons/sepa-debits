@@ -9,13 +9,12 @@
 module Sepa.Controller.DirectDebit where
 
 import           Control.Lens             hiding (element, elements, index, set, view)
+import           Control.Monad
 import           Data.Maybe
-import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
-import qualified Data.Text.Lazy           as TL (unpack)
+import qualified Data.Text                as T (Text, unpack)
 import qualified Data.Time.Calendar       as C
 import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
-import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import           Sepa.BillingConcept
 import           Sepa.Controller.BillingConcept -- TODO: Drop this dependency (price funcs)
@@ -24,7 +23,13 @@ import           Sepa.Controller.TreeView
 import           Sepa.Debtor
 import           Sepa.DirectDebit
 
-data DirectDebitsController = DD PanelId Builder
+data DirectDebitsController =
+  DD
+  { panelId_ :: PanelId
+  , builder_ :: Builder
+  , itemsTv  :: TreeView
+  , itemsLs  :: ListStore Item
+  }
 
 instance Controller DirectDebitsController where
 
@@ -34,9 +39,9 @@ instance Controller DirectDebitsController where
 
   data D DirectDebitsController = DDD
 
-  builder  (DD _        builder_) = builder_
+  builder = builder_
 
-  panelId  (DD panelId_ _       ) = panelId_
+  panelId = panelId_
 
   selector = getGladeObject castToComboBox "_Cb"
 
@@ -48,7 +53,7 @@ instance Controller DirectDebitsController where
     let renderFunc = T.unpack . (^. description) . DB.entityVal
     cellLayoutSetAttributes comboBox renderer listStore (\row -> [cellText := renderFunc row])
 
-  setSelectorSorting comboBox listStore sortedModel c = do
+  setSelectorSorting _comboBox listStore sortedModel _c = do
     let renderFunc = T.unpack . (^. description) . DB.entityVal
     treeSortableSetSortFunc sortedModel 0 $ \xIter yIter -> do
       xRow <- customStoreGetRow listStore xIter
@@ -86,6 +91,31 @@ instance Controller DirectDebitsController where
     _ <- on comboBox changed onSelectionChangedAction
     return onSelectionChangedAction
 
+  putElement' iter ls c = do
+    ddsE <- treeModelGetRow ls iter
+    let dds = DB.entityVal ddsE
+    listStoreClear (itemsLs c)
+    forM_ (dds ^.. debits.traverse) $ \dd ->
+      forM_ (dd ^.. items.traverse) $ \bc -> do
+        let item = Item { itemLastName    = dd ^. debtorLastName
+                        , itemFirstName   = dd ^. debtorFirstName
+                        , itemShortName   = bc ^. shortName
+                        , itemActualPrice = bc ^. basePrice}
+        listStoreAppend (itemsLs c) item
+
+
+
+data Item =
+  Item
+  { itemLastName    :: T.Text
+  , itemFirstName   :: T.Text
+  , itemShortName   :: T.Text
+  , itemActualPrice :: Int
+  }
+
+
+-- | Calls Controller::mkController and then adds special functionality for direct debit
+-- sets.
 mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.BillingConcept)),
                   TreeModelClass (deModel (DB.Entity Sepa.Debtor.Debtor)),
                   TypedTreeModelClass bcModel, TypedTreeModelClass deModel) =>
@@ -98,6 +128,8 @@ mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.Billing
 mkController' db setMainState c bcLs deLs = do
   _ <- mkController db setMainState c
   let orderings = repeat compare -- TODO: catalan collation
+
+  -- FIXME: use treeModelFilterRefilter every time deLs and bcLs could have changed
 
   -- billing concepts TreeView
   bcTv   <- getGladeObject castToTreeView "_billingConceptsTv" c
@@ -126,8 +158,4 @@ mkController' db setMainState c bcLs deLs = do
   setTreeViewRenderers       deTv deLs                            deRf
   setTreeViewSorting         deTv deLs (Just deFm) deSm orderings deRf
 
--- FIXME: use treeModelFilterRefilter every time deLs could have changed
-
---   putElement' iter ls c = do
---     ddsE <- treeModelGetRow ls iter
---     listStoreNew
+  return ()

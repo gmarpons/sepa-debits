@@ -13,6 +13,7 @@ module Main
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
+import qualified Data.Text                as T (unpack)
 import qualified Data.Time.Clock          as C (NominalDiffTime)
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
@@ -21,6 +22,7 @@ import           Sepa.Controller.BillingConcept
 import           Sepa.Controller.Class
 import           Sepa.Controller.Debtor
 import           Sepa.Controller.DirectDebit
+import           Sepa.Controller.TreeView
 
 main :: IO ()
 main = do
@@ -43,11 +45,26 @@ main = do
 mkMainWindowGui :: Builder -> DB.ConnectionPool -> IO Window
 mkMainWindowGui builder_ db = do
 
+  -- items TreeView
+  -- TODO: move itTv and itLs creation to another place
+
+  itTv <- builderGetObject builder_ castToTreeView "DD_itemsTv"
+  itLs <- listStoreNew ([] :: [Item])
+  itSm <- treeModelSortNewWithModel itLs
+  let itRf = [ T.unpack      . itemLastName
+             , T.unpack      . itemFirstName
+             , T.unpack      . itemShortName
+             , priceToString . itemActualPrice
+             ]
+  treeViewSetModel     itTv              itSm
+  setTreeViewRenderers itTv itLs                        itRf
+  setTreeViewSorting   itTv itLs Nothing itSm [compare] itRf
+
   -- Create panel controllers and helper lists
 
   let bcController = BC "BC" builder_
       deController = DE "DE" builder_
-      ddController = DD "DD" builder_
+      ddController = DD "DD" builder_ itTv itLs
       controllers  = [ MkBController bcController
                      , MkBController deController
                      , MkBController ddController
