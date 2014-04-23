@@ -964,6 +964,7 @@
                                 <property name="invisible_char">●</property>
                                 <property name="width_chars">12</property>
                                 <property name="text" translatable="yes">0.0</property>
+                                <property name="xalign">1</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1007,6 +1008,7 @@
                                 <property name="invisible_char">●</property>
                                 <property name="width_chars">12</property>
                                 <property name="text" translatable="yes">0.0</property>
+                                <property name="xalign">1</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1050,6 +1052,7 @@
                                 <property name="invisible_char">●</property>
                                 <property name="width_chars">3</property>
                                 <property name="text" translatable="yes">0</property>
+                                <property name="xalign">1</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>

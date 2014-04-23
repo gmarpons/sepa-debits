@@ -149,11 +149,18 @@ instance Controller DirectDebitsController where
     listStoreClear (itemsLs c)
     forM_ (dds ^.. debits.traverse) $ \dd ->
       forM_ (dd ^.. items.traverse) $ \bc -> do
-        let item = Item { itemLastName    = dd ^. debtorLastName
-                        , itemFirstName   = dd ^. debtorFirstName
-                        , itemMandate     = dd ^. mandate
-                        , item            = bc}
-        listStoreAppend (itemsLs c) item
+        let item_ = Item { itemLastName    = dd ^. debtorLastName
+                         , itemFirstName   = dd ^. debtorFirstName
+                         , itemMandate     = dd ^. mandate
+                         , item            = bc}
+        listStoreAppend (itemsLs c) item_
+    let debits_ = dds ^. debits
+    basePriceEn_      <- getGladeObject castToEntry "_basePriceEn"      c
+    finalPriceEn_     <- getGladeObject castToEntry "_finalPriceEn"     c
+    numberOfDebitsEn_ <- getGladeObject castToEntry "_numberOfDebitsEn" c
+    set basePriceEn_  [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.basePrice)  debits_]
+    set finalPriceEn_ [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.finalPrice) debits_]
+    set numberOfDebitsEn_ [entryText := show (length debits_)]
 
 -- | Calls Controller::mkController and then adds special functionality for direct debit
 -- sets.
