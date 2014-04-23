@@ -151,9 +151,9 @@ mkMainWindowGui builder_ db = do
 
   -- Create controllers for all panels, and return
 
-  (_, bcLs, _) <- mkController  db setState bcController
-  (_, deLs, _) <- mkController  db setState deController
-  _            <- mkController' db setState ddController bcLs deLs
+  (_, _, bcLs, _) <- mkController  db setState bcController
+  (_, _, deLs, _) <- mkController  db setState deController
+  _               <- mkController' db setState ddController bcLs deLs
   return mainWd
 
 -- | Box for heterogeneous collections of @Controller@'s.

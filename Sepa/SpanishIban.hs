@@ -1,7 +1,5 @@
-{-# LANGUAGE
-  NoImplicitPrelude,
-  OverloadedStrings
-  #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Sepa.SpanishIban
        ( -- Spanish iban
@@ -14,15 +12,10 @@ module Sepa.SpanishIban
        ) where
 
 import           ClassyPrelude
-import qualified Control.Lens                                                   as L
-  (Conjoined, Gettable,
-   to)
-import qualified Data.Char                                                      as CH
-  (digitToInt, intToDigit, isDigit)
-import qualified Data.Text.Read                                                 as TXT
-  (decimal)
-import qualified Text.Printf                                                    as PF
-  (printf)
+import qualified Control.Lens   as L (Conjoined, Gettable, to)
+import qualified Data.Char      as CH (digitToInt, intToDigit, isDigit)
+import qualified Data.Text.Read as TXT (decimal)
+import qualified Text.Printf    as PF (printf)
 
 
 type IBAN = Text

@@ -103,7 +103,8 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   -- callback events. All the other functions in this class are here only to be called by
   -- @mkController@, except @panelId@, @panel@ and @chooser@.
   mkController         :: (Controller c, TreeModelSortClass sm, sm ~ TypedTreeModelSort (PS c)) =>
-                          DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO (PanelState c -> IO (), LS c, sm)
+                          DB.ConnectionPool -> (MainWindowState -> IO ()) -> c
+                       -> IO (PanelState c -> IO (), IORef (PanelState c), LS c, sm)
 
   -- Default implementations for some functions
 
@@ -182,7 +183,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
 mkControllerImpl :: forall c sm . (Controller c, TreeModelSortClass sm, sm ~ TypedTreeModelSort (PS c),
                      DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
                     DB.ConnectionPool -> (MainWindowState -> IO ()) -> c
-                 -> IO (PanelState c -> IO (), LS c, sm)
+                 -> IO (PanelState c -> IO (), IORef (PanelState c), LS c, sm)
 mkControllerImpl db setMainWdState c = do
 
   -- FIXME: NoSel -> newTb -> Cannot save
@@ -328,7 +329,7 @@ mkControllerImpl db setMainWdState c = do
   --     _                                     -> return ()
 
   mkSubElemController ls sm db stRef c
-  return (setState, ls, sm)
+  return (setState, stRef, ls, sm)
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> c -> IO b
 getGladeObject cast name c =

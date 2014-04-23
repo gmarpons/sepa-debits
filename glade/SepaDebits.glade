@@ -514,19 +514,34 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkButton" id="DD_printBt">
-                    <property name="label" translatable="yes">Genera fitxer i llistat</property>
+                  <object class="GtkButton" id="DD_fileBt">
+                    <property name="label" translatable="yes">Genera fitxer</property>
                     <property name="use_action_appearance">False</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="receives_default">True</property>
                     <property name="use_action_appearance">False</property>
-                    <property name="image">printDirectDebitIcon</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">False</property>
                     <property name="position">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="DD_printBt">
+                    <property name="label" translatable="yes">Imprimeix llistat</property>
+                    <property name="use_action_appearance">False</property>
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="receives_default">True</property>
+                    <property name="use_action_appearance">False</property>
+                    <property name="image">printIcon</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">3</property>
                   </packing>
                 </child>
               </object>
@@ -1307,6 +1322,11 @@
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-edit</property>
+  </object>
+  <object class="GtkImage" id="image1">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="stock">gtk-missing-image</property>
   </object>
   <object class="GtkWindow" id="mainWd">
     <property name="can_focus">False</property>
@@ -2352,7 +2372,7 @@
     <property name="can_focus">False</property>
     <property name="stock">gtk-new</property>
   </object>
-  <object class="GtkImage" id="printDirectDebitIcon">
+  <object class="GtkImage" id="printIcon">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="stock">gtk-print</property>

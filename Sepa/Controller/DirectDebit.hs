@@ -8,11 +8,13 @@
 
 module Sepa.Controller.DirectDebit where
 
+import           Control.Arrow
 import           Control.Lens                   hiding (element, elements,
                                                  index, set, view)
-import           Control.Arrow
 import           Control.Monad
+import           Data.IORef
 import           Data.List                      (groupBy, sortBy)
+import qualified Data.Map                       as M
 import           Data.Maybe
 import           Data.Ord
 import qualified Data.Text                      as T
@@ -27,6 +29,7 @@ import           Sepa.Controller.TreeView
 import           Sepa.Creditor
 import           Sepa.Debtor
 import           Sepa.DirectDebit
+import           Sepa.DirectDebitMessageXML
 import qualified Text.Printf                    as PF (printf)
 
 data DirectDebitsController =
@@ -102,13 +105,14 @@ instance Controller DirectDebitsController where
 
   selectWidgets c = do
     w1 <- getGladeObject castToButton "_cloneBt" c
-    w2 <- getGladeObject castToButton "_printBt" c
-    return [toWidget w1, toWidget w2]
+    w2 <- getGladeObject castToButton "_fileBt"  c
+    w3 <- getGladeObject castToButton "_printBt" c
+    return [toWidget w1, toWidget w2, toWidget w3]
 
   readData [descriptionEn, _] c = do
     description_ <- get descriptionEn entryText
     today <- C.getZonedTime
-    debits_ <- readItems c 
+    debits_ <- readItems c
     return DDD { descriptionD  = T.pack description_
                , creationTimeD = today
                , debitsD       = debits_ }
@@ -169,7 +173,7 @@ mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.Billing
               -> deModel (DB.Entity Sepa.Debtor.Debtor)
               -> IO ()
 mkController' db setMainState c bcLs deLs = do
-  (setState, ls, sm) <- mkController db setMainState c
+  (setState, stRef, ls, sm) <- mkController db setMainState c
   let orderings = repeat compare -- TODO: catalan collation
 
   -- FIXME: use treeModelFilterRefilter every time deLs and bcLs could have changed
@@ -312,6 +316,17 @@ mkController' db setMainState c bcLs deLs = do
         -- TODO: cheaper totals calculation (readItems needs to sort)
         debits_ <- readItems c
         computeAndShowTotals debits_ c
+
+  fileBt <- getGladeObject castToButton "_fileBt" c
+
+  _ <- on fileBt buttonActivated $ do
+    Sel iter <- readIORef stRef -- FIXME: unsafe pattern
+    ddsE <- treeModelGetRow ls iter
+    let dds = DB.entityVal ddsE
+    banks <- flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter SpanishBank]) []
+    let banksMap = M.fromList $ map (\e -> (DB.entityVal e ^. fourDigitsCode, DB.entityVal e)) banks
+    writeMessageToFile dds banksMap
+
 
   return ()
 
