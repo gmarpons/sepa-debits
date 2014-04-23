@@ -88,7 +88,18 @@ instance Controller DirectDebitsController where
     e2 <- getGladeObject castToEntry "_EE_editionDateEn" c
     return [e1, e2]
 
-  readData [descriptionEn] c = do
+  editWidgets c = do
+    w1 <- getGladeObject castToTreeView "_debtorsTv"         c
+    w2 <- getGladeObject castToTreeView "_billingConceptsTv" c
+    w3 <- getGladeObject castToTreeView "_itemsTv"           c
+    return [toWidget w1, toWidget w2, toWidget w3]
+
+  selectWidgets c = do
+    w1 <- getGladeObject castToButton "_cloneBt" c
+    w2 <- getGladeObject castToButton "_printBt" c
+    return [toWidget w1, toWidget w2]
+
+  readData [descriptionEn, _] c = do
     description_ <- get descriptionEn entryText
     today <- C.getZonedTime
     -- let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
@@ -110,7 +121,7 @@ instance Controller DirectDebitsController where
   -- Impossible to create invalid direct debit set with the GUI interface.
   validData _ _ = return True
 
-  createFromData (DDD description_ creation_ debits_) db c = do
+  createFromData (DDD description_ creation_ debits_) db _c = do
     mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
     case mCreditor of
       Nothing        -> error "DirectDebitsController::createFromData: no creditor"
