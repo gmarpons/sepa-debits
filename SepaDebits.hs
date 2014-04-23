@@ -151,9 +151,9 @@ mkMainWindowGui builder_ db = do
 
   -- Create controllers for all panels, and return
 
-  bcLs <- mkController  db setState bcController
-  deLs <- mkController  db setState deController
-  _    <- mkController' db setState ddController bcLs deLs
+  (_, bcLs, _) <- mkController  db setState bcController
+  (_, deLs, _) <- mkController  db setState deController
+  _            <- mkController' db setState ddController bcLs deLs
   return mainWd
 
 -- | Box for heterogeneous collections of @Controller@'s.
@@ -172,5 +172,3 @@ bPanel        :: BController -> IO VBox
 bPanelId      (MkBController c)      = panelId c
 bChooser      (MkBController c)      = chooser c
 bPanel        (MkBController c)      = panel   c
--- bRunMkController :: BController -> DB.ConnectionPool -> (MainWindowState -> IO ()) -> IO ()
--- bRunMkController (MkBController c) db f = mkController db f c

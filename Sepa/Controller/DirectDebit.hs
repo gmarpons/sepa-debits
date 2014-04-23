@@ -13,10 +13,9 @@ import           Control.Lens                   hiding (element, elements,
 import           Control.Monad
 import           Data.List                      (groupBy)
 import           Data.Maybe
-import qualified Data.Text                      as T (Text, pack, unpack)
+import qualified Data.Text                      as T
 import qualified Data.Time.Calendar             as C
 import qualified Data.Time.LocalTime            as C
-import qualified Database.Persist
 import qualified Database.Persist.MongoDB       as DB
 import           Graphics.UI.Gtk
 import           Sepa.BillingConcept
@@ -26,6 +25,7 @@ import           Sepa.Controller.TreeView
 import           Sepa.Creditor
 import           Sepa.Debtor
 import           Sepa.DirectDebit
+import qualified Text.Printf               as PF (printf)
 
 data DirectDebitsController =
   DD
@@ -72,10 +72,13 @@ instance Controller DirectDebitsController where
 
   setSelectorSorting _comboBox listStore sortedModel _c = do
     let renderFunc = T.unpack . (^. description) . DB.entityVal
-    treeSortableSetSortFunc sortedModel 0 $ \xIter yIter -> do
+    let firstColumnId = 0
+    treeSortableSetSortFunc sortedModel firstColumnId $ \xIter yIter -> do
       xRow <- customStoreGetRow listStore xIter
       yRow <- customStoreGetRow listStore yIter
       return $ compare (renderFunc xRow) (renderFunc yRow)
+    -- Force initial sorting: descending (newest dds first)
+    treeSortableSetSortColumnId sortedModel firstColumnId SortDescending
 
   renderers _ = do
     let zonedTimeToGregorian = C.showGregorian . C.localDay . C.zonedTimeToLocalTime
@@ -130,7 +133,9 @@ instance Controller DirectDebitsController where
 
   updateFromData d _old = createFromData d
 
-  selectElement iter comboBox _sortedModel _c = comboBoxSetActiveIter comboBox iter
+  selectElement iter comboBox sortedModel _c = do
+    sortedIter <- treeModelSortConvertChildIterToIter sortedModel iter
+    comboBoxSetActiveIter comboBox sortedIter
 
   connectSelector comboBox sortedModel setState _c = do
     let onSelectionChangedAction = do
@@ -155,12 +160,12 @@ instance Controller DirectDebitsController where
                          , item            = bc}
         listStoreAppend (itemsLs c) item_
     let debits_ = dds ^. debits
-    basePriceEn_      <- getGladeObject castToEntry "_basePriceEn"      c
-    finalPriceEn_     <- getGladeObject castToEntry "_finalPriceEn"     c
-    numberOfDebitsEn_ <- getGladeObject castToEntry "_numberOfDebitsEn" c
-    set basePriceEn_  [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.basePrice)  debits_]
-    set finalPriceEn_ [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.finalPrice) debits_]
-    set numberOfDebitsEn_ [entryText := show (length debits_)]
+    basePriceEn      <- getGladeObject castToEntry "_basePriceEn"      c
+    finalPriceEn     <- getGladeObject castToEntry "_finalPriceEn"     c
+    numberOfDebitsEn <- getGladeObject castToEntry "_numberOfDebitsEn" c
+    set basePriceEn  [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.basePrice)  debits_]
+    set finalPriceEn [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.finalPrice) debits_]
+    set numberOfDebitsEn [entryText := show (length debits_)]
 
 -- | Calls Controller::mkController and then adds special functionality for direct debit
 -- sets.
@@ -174,12 +179,13 @@ mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.Billing
               -> deModel (DB.Entity Sepa.Debtor.Debtor)
               -> IO ()
 mkController' db setMainState c bcLs deLs = do
-  _ <- mkController db setMainState c
+  (setState, ls, sm) <- mkController db setMainState c
   let orderings = repeat compare -- TODO: catalan collation
 
   -- FIXME: use treeModelFilterRefilter every time deLs and bcLs could have changed
 
   -- billing concepts TreeView
+
   bcTv   <- getGladeObject castToTreeView "_billingConceptsTv" c
   bcSm   <- treeModelSortNewWithModel bcLs
   let bcRf = [ T.unpack      . (^. longName)   . DB.entityVal
@@ -191,6 +197,7 @@ mkController' db setMainState c bcLs deLs = do
   setTreeViewSorting        bcTv bcLs Nothing bcSm orderings bcRf
 
   -- debtors TreeView
+
   deTv   <- getGladeObject castToTreeView "_debtorsTv" c
   let deRf = [ T.unpack      . (^. lastName)   . DB.entityVal
              , T.unpack      . (^. firstName)  . DB.entityVal
@@ -206,9 +213,49 @@ mkController' db setMainState c bcLs deLs = do
   setTreeViewRenderers       deTv deLs                            deRf
   setTreeViewSorting         deTv deLs (Just deFm) deSm orderings deRf
 
+  -- Visibility of extra buttons
+
+  actualBasePriceEn <- getGladeObject castToEntry  "_actualBasePriceEn" c
+  addItemBt         <- getGladeObject castToButton "_addItemBt"         c
+  deleteItemBt      <- getGladeObject castToButton "_deleteBt"          c
+  set actualBasePriceEn [widgetSensitive := False]
+  set addItemBt         [widgetSensitive := False]
+  set deleteItemBt      [widgetSensitive := False]
+
+  -- Connect buttons
+
   cloneBt <- getGladeObject castToButton "_cloneBt" c
+
   _ <- on cloneBt buttonActivated $ do
+    selector_ <- selector c
     incrementCreditorMessageCount db
-    return ()
+    mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
+    creditor_ <- case mCreditor of
+      Nothing        -> error "DirectDebitsController::mkController': no creditor"
+      Just creditorE -> return $ DB.entityVal creditorE
+    let description_ = T.concat [ T.filter (/= ' ') (creditor_ ^. fullName)
+                                , "_"
+                                , T.pack (C.showGregorian today)
+                                , "_"
+                                , T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
+                                ]
+    mIter <- comboBoxGetActiveIter selector_
+    debits_ <- case mIter of
+      Nothing     -> error "DirectDebitsController::mkController': no combobox iter"
+      (Just iter) -> do
+        childIter <- treeModelSortConvertIterToChildIter sm iter
+        ddsE      <- treeModelGetRow ls childIter
+        return $ DB.entityVal ddsE ^. debits
+    let newDdsV = mkDirectDebitSet description_ zonedTime creditor_ debits_
+    newDdsK <- flip DB.runMongoDBPoolDef db $ DB.insert newDdsV
+    listStorePrepend ls (DB.Entity newDdsK newDdsV)
+    mNewIter <- treeModelGetIterFirst ls
+    newIter <- case mNewIter of
+      Nothing      -> error "DirectDebitsController::mkController': no new iter to cloned"
+      Just iter    -> return iter
+    sortedIter <- treeModelSortConvertChildIterToIter sm newIter
+    comboBoxSetActiveIter selector_ sortedIter
+    setState (Sel newIter)
+    putStrLn "Clone done."
 
   return ()

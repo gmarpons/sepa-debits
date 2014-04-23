@@ -19,6 +19,7 @@ data MainWindowState
 
 --makeLenses ''MainWindowState
 
+-- | Option @Sel@ stores a @ListStore@ (child) iter.
 data PanelState c
   = NoSel
   | Sel     { _iter :: TreeIter }
@@ -101,7 +102,8 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   -- initializes all the panel widgets, including connection with persistent model and
   -- callback events. All the other functions in this class are here only to be called by
   -- @mkController@, except @panelId@, @panel@ and @chooser@.
-  mkController         :: DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO (LS c)
+  mkController         :: (Controller c, TreeModelSortClass sm, sm ~ TypedTreeModelSort (PS c)) =>
+                          DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO (PanelState c -> IO (), LS c, sm)
 
   -- Default implementations for some functions
 
@@ -177,9 +179,10 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
 
   mkController = mkControllerImpl -- Implemented as a top-level function
 
-mkControllerImpl :: forall c . (Controller c,
+mkControllerImpl :: forall c sm . (Controller c, TreeModelSortClass sm, sm ~ TypedTreeModelSort (PS c),
                      DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend) =>
-                    DB.ConnectionPool -> (MainWindowState -> IO ()) -> c -> IO (LS c)
+                    DB.ConnectionPool -> (MainWindowState -> IO ()) -> c
+                 -> IO (PanelState c -> IO (), LS c, sm)
 mkControllerImpl db setMainWdState c = do
 
   -- FIXME: NoSel -> newTb -> Cannot save
@@ -325,7 +328,7 @@ mkControllerImpl db setMainWdState c = do
   --     _                                     -> return ()
 
   mkSubElemController ls sm db stRef c
-  return ls
+  return (setState, ls, sm)
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> c -> IO b
 getGladeObject cast name c =

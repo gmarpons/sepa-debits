@@ -10,8 +10,7 @@ import           Data.List
 import           Graphics.UI.Gtk
 import           Sepa.Controller.Class
 
-selectTreeViewElement ::  (TreeModelSortClass sm) =>
-                          TreeIter -> TreeView -> sm -> IO ()
+selectTreeViewElement ::  (TreeModelSortClass sm) => TreeIter -> TreeView -> sm -> IO ()
 selectTreeViewElement iter treeView sortedModel = do
   sortedIter <- treeModelSortConvertChildIterToIter sortedModel iter
   selection  <- treeViewGetSelection treeView
@@ -86,8 +85,8 @@ connectTreeView treeView sortedModel setState = do
         if count == 0
           then setState NoSel
           else treeSelectionSelectedForeach selection $ \iter -> do
-            cIter <- toChildIter iter
-            setState (Sel cIter)
+            childIter <- toChildIter iter
+            setState (Sel childIter)
 
   _ <- on selection treeSelectionSelectionChanged onSelectionChangedAction
 
