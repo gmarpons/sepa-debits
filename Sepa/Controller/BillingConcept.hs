@@ -84,7 +84,7 @@ instance Controller BillingConceptsController where
   validData d _ =
     return $ validBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
 
-  createFromData d _c =
+  createFromData d _db _c =
     return $ mkBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
 
   updateFromData d _old = createFromData d

@@ -1,10 +1,8 @@
-{-# LANGUAGE
-  GADTs,
-  NoImplicitPrelude,
-  OverloadedStrings,
-  TemplateHaskell,
-  TypeFamilies
-  #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Sepa.DirectDebit
        ( -- Direct debit instructions set
@@ -33,13 +31,13 @@ module Sepa.DirectDebit
 
 import           ClassyPrelude
 import           Control.Lens
-import qualified Data.List                                                      as LT
-import qualified Data.Time.Calendar                                             as T
-import qualified Data.Time.LocalTime                                            as T
-import qualified Database.Persist.Quasi                                         as DB
-  (upperCaseSettings)
-import qualified Database.Persist.TH                                            as DB
-  (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
+import qualified Data.List              as LT
+import qualified Data.Time.Calendar     as T
+import qualified Data.Time.LocalTime    as T
+import qualified Database.Persist.Quasi as DB (upperCaseSettings)
+import qualified Database.Persist.TH    as DB (mkPersist, mpsGenerateLenses,
+                                               mpsPrefixFields, persistFileWith,
+                                               share)
 import           Sepa.BillingConcept
 import           Sepa.Creditor
 import           Sepa.Debtor
@@ -56,9 +54,9 @@ DB.share [DB.mkPersist mongoSettings { DB.mpsGenerateLenses = True
 -- Direct debit instruction set
 
 mkDirectDebitSet :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> DirectDebitSet
-mkDirectDebitSet descr creation_ creditor_ debits_ =
-  assert (validDirectDebitSet descr creation_ creditor_ debits_)
-  $ DirectDebitSet descr creation_ creditor_ debits_
+mkDirectDebitSet description_ creation_ creditor_ debits_ =
+  assert (validDirectDebitSet description_ creation_ creditor_ debits_)
+  $ DirectDebitSet description_ creation_ creditor_ debits_
 
 -- Cannot check meaningful creation date outside IO
 validDirectDebitSet :: Text -> T.ZonedTime -> Creditor -> [DirectDebit] -> Bool

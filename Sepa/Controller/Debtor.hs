@@ -86,17 +86,16 @@ instance Controller DebtorsController where
     return DDE { lastNameD   = T.pack lastName_
                , firstNameD  = T.pack firstName_
                }
-
   readData _ _ = error "readData (DE): wrong number of entries"
 
   validData d _c = return $ validDebtorName (firstNameD d) (lastNameD d)
 
-  createFromData d _ = do
+  createFromData d _db _c = do
     zonedTime <- C.getZonedTime
     let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
     return $ mkDebtor (firstNameD d) (lastNameD d) [] today
 
-  updateFromData d old _ =
+  updateFromData d old _db _c =
     return $ old & firstName .~ firstNameD d & lastName .~ lastNameD d
 
   selectElement it s sm _c = selectTreeViewElement it s sm

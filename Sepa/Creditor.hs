@@ -1,10 +1,8 @@
-{-# LANGUAGE
-  GADTs,
-  NoImplicitPrelude,
-  OverloadedStrings,
-  TemplateHaskell,
-  TypeFamilies
-  #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Sepa.Creditor
        ( -- Creditor
@@ -16,14 +14,18 @@ module Sepa.Creditor
          messageCount,
          mandateCount,
          activity,
-         validCreditor
+         validCreditor,
+         incrementCreditorMessageCount
        ) where
 
 import           ClassyPrelude
-import qualified Database.Persist.Quasi                                         as DB
-  (upperCaseSettings)
-import qualified Database.Persist.TH                                            as DB
-  (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
+import           Control.Lens
+import           Database.Persist         ((+=.))
+import qualified Database.Persist.MongoDB as DB
+import qualified Database.Persist.Quasi   as DB (upperCaseSettings)
+import qualified Database.Persist.TH      as DB (mkPersist, mpsGenerateLenses,
+                                                 mpsPrefixFields,
+                                                 persistFileWith, share)
 import           Sepa.MongoSettings
 import           Sepa.SpanishIban
 
@@ -51,3 +53,9 @@ validCreditor id_ name iban messageCount_ mandateCount_ _activity =
   && mandateCount_ >= 0
   where
     maxLengthFullName = 70      -- SEPA constraint
+
+incrementCreditorMessageCount :: DB.ConnectionPool -> IO ()
+incrementCreditorMessageCount db =
+  -- Update all creditors (should exist exactly one)
+  flip DB.runMongoDBPoolDef db $ DB.updateWhere ([] :: [DB.Filter Creditor]) [MessageCount +=. 1]
+

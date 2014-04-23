@@ -60,8 +60,9 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
                        -> (PanelState c -> IO ())                          -> c -> IO (IO ())
   readData             :: [Entry]                                          -> c -> IO (D c)
   validData            :: D c                                              -> c -> IO Bool
-  createFromData       :: D c                                              -> c -> IO (E c)
-  updateFromData       :: D c -> E c                                       -> c -> IO (E c)
+  -- FIXME: DB.ConnectionPool used only to get Creditor in DirectDebitsController
+  createFromData       :: D c                         -> DB.ConnectionPool -> c -> IO (E c)
+  updateFromData       :: D c -> E c                  -> DB.ConnectionPool -> c -> IO (E c)
   selectElement        :: (TreeModelSortClass sm) => TreeIter -> S c -> sm -> c -> IO ()
 
   -- The following functions may be re-implemented, default instance implementation does
@@ -158,7 +159,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
 
   insertElement ls db entries c = do
     data_ <- readData entries c  -- Assume data is valid
-    val   <- createFromData data_ c
+    val   <- createFromData data_ db c
     key   <- flip DB.runMongoDBPoolDef db $ DB.insert val -- FIXME: check unique constraints
     index <- listStoreAppend ls (DB.Entity key val)
     let treePath = stringToTreePath (show index)
@@ -168,7 +169,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   updateElement iter ls db entries c = do
     dataNew <- readData entries c  -- Assume data is valid
     old     <- treeModelGetRow ls iter
-    new     <- updateFromData dataNew (DB.entityVal old) c
+    new     <- updateFromData dataNew (DB.entityVal old) db c
     flip DB.runMongoDBPoolDef db $ DB.replace (DB.entityKey old) new
     let index = listStoreIterToIndex iter
     listStoreSetValue ls index (DB.Entity (DB.entityKey old) new)

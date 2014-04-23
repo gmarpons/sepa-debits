@@ -8,18 +8,22 @@
 
 module Sepa.Controller.DirectDebit where
 
-import           Control.Lens             hiding (element, elements, index, set, view)
+import           Control.Lens                   hiding (element, elements,
+                                                 index, set, view)
 import           Control.Monad
+import           Data.List                      (groupBy)
 import           Data.Maybe
-import qualified Data.Text                as T (Text, unpack)
-import qualified Data.Time.Calendar       as C
-import qualified Data.Time.LocalTime      as C
-import qualified Database.Persist.MongoDB as DB
+import qualified Data.Text                      as T (Text, pack, unpack)
+import qualified Data.Time.Calendar             as C
+import qualified Data.Time.LocalTime            as C
+import qualified Database.Persist
+import qualified Database.Persist.MongoDB       as DB
 import           Graphics.UI.Gtk
 import           Sepa.BillingConcept
-import           Sepa.Controller.BillingConcept -- TODO: Drop this dependency (price funcs)
+import           Sepa.Controller.BillingConcept
 import           Sepa.Controller.Class
 import           Sepa.Controller.TreeView
+import           Sepa.Creditor
 import           Sepa.Debtor
 import           Sepa.DirectDebit
 
@@ -31,13 +35,26 @@ data DirectDebitsController =
   , itemsLs  :: ListStore Item
   }
 
+data Item =
+  Item
+  { itemLastName  :: T.Text
+  , itemFirstName :: T.Text
+  , itemMandate   :: Mandate
+  , item          :: BillingConcept
+  }
+
 instance Controller DirectDebitsController where
 
   type E DirectDebitsController = DirectDebitSet
 
   type S DirectDebitsController = ComboBox
 
-  data D DirectDebitsController = DDD
+  data D DirectDebitsController =
+    DDD
+    { descriptionD  :: T.Text
+    , creationTimeD :: C.ZonedTime
+    , debitsD       :: [DirectDebit]
+    }
 
   builder = builder_
 
@@ -60,21 +77,45 @@ instance Controller DirectDebitsController where
       yRow <- customStoreGetRow listStore yIter
       return $ compare (renderFunc xRow) (renderFunc yRow)
 
-  renderers _ = return [ C.showGregorian . C.localDay . C.zonedTimeToLocalTime . (^. creationTime) . DB.entityVal
-                       ]
+  renderers _ = do
+    let zonedTimeToGregorian = C.showGregorian . C.localDay . C.zonedTimeToLocalTime
+    return [ T.unpack             . (^. description)  . DB.entityVal
+           , zonedTimeToGregorian . (^. creationTime) . DB.entityVal
+           ]
 
   editEntries c = do
-    e1 <- getGladeObject castToEntry "_EE_editionDateEn" c
-    return [e1]
+    e1 <- getGladeObject castToEntry "_EE_descriptionEn" c
+    e2 <- getGladeObject castToEntry "_EE_editionDateEn" c
+    return [e1, e2]
 
-  readData [] _ = return DDD
+  readData [descriptionEn] c = do
+    description_ <- get descriptionEn entryText
+    today <- C.getZonedTime
+    -- let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
+    let sameDebtor (Item last1 first1 _ _) (Item last2 first2 _ _)
+          = last1 == last2 && first1 == first2
+    items_  <- listStoreToList (itemsLs c)
+    let items' = groupBy sameDebtor items_
+    debits_ <- forM items' $ \itL -> do
+      -- TRUST: the use of goupBy ensures that length itL >= 0
+      let it = head itL
+      -- TRUST: no invalid debits can be created (so we don't call validDirectDebit)
+      return $ mkDirectDebit (itemFirstName it) (itemLastName it) (itemMandate it) (map item itL)
+    return DDD { descriptionD  = T.pack description_
+               , creationTimeD = today
+               , debitsD       = debits_ }
+
   readData _ _  = error "readData (DD): wrong number of entries"
 
-  -- validData d _ =
-  --   return $ validBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
+  -- Impossible to create invalid direct debit set with the GUI interface.
+  validData _ _ = return True
 
-  -- createFromData d _c =
-  --   return $ mkBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
+  createFromData (DDD description_ creation_ debits_) db c = do
+    mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
+    case mCreditor of
+      Nothing        -> error "DirectDebitsController::createFromData: no creditor"
+      Just creditor_ ->
+        return $ mkDirectDebitSet description_ creation_ (DB.entityVal creditor_) debits_
 
   updateFromData d _old = createFromData d
 
@@ -99,20 +140,9 @@ instance Controller DirectDebitsController where
       forM_ (dd ^.. items.traverse) $ \bc -> do
         let item = Item { itemLastName    = dd ^. debtorLastName
                         , itemFirstName   = dd ^. debtorFirstName
-                        , itemShortName   = bc ^. shortName
-                        , itemActualPrice = bc ^. basePrice}
+                        , itemMandate     = dd ^. mandate
+                        , item            = bc}
         listStoreAppend (itemsLs c) item
-
-
-
-data Item =
-  Item
-  { itemLastName    :: T.Text
-  , itemFirstName   :: T.Text
-  , itemShortName   :: T.Text
-  , itemActualPrice :: Int
-  }
-
 
 -- | Calls Controller::mkController and then adds special functionality for direct debit
 -- sets.
@@ -157,5 +187,10 @@ mkController' db setMainState c bcLs deLs = do
   treeViewSetModel           deTv                  deSm
   setTreeViewRenderers       deTv deLs                            deRf
   setTreeViewSorting         deTv deLs (Just deFm) deSm orderings deRf
+
+  cloneBt <- getGladeObject castToButton "_cloneBt" c
+  _ <- on cloneBt buttonActivated $ do
+    incrementCreditorMessageCount db
+    return ()
 
   return ()

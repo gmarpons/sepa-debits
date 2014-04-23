@@ -10,6 +10,7 @@ module Main
        ( main
        ) where
 
+import           Control.Lens             hiding (set)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
@@ -18,6 +19,7 @@ import qualified Data.Time.Clock          as C (NominalDiffTime)
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
 import qualified Network                  as N (PortID (PortNumber))
+import           Sepa.BillingConcept
 import           Sepa.Controller.BillingConcept
 import           Sepa.Controller.Class
 import           Sepa.Controller.Debtor
@@ -53,8 +55,8 @@ mkMainWindowGui builder_ db = do
   itSm <- treeModelSortNewWithModel itLs
   let itRf = [ T.unpack      . itemLastName
              , T.unpack      . itemFirstName
-             , T.unpack      . itemShortName
-             , priceToString . itemActualPrice
+             , T.unpack      . (^. shortName) . item
+             , priceToString . (^. basePrice) . item
              ]
   treeViewSetModel     itTv              itSm
   setTreeViewRenderers itTv itLs                        itRf
