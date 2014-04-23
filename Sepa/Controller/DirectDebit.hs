@@ -25,7 +25,7 @@ import           Sepa.Controller.TreeView
 import           Sepa.Creditor
 import           Sepa.Debtor
 import           Sepa.DirectDebit
-import qualified Text.Printf               as PF (printf)
+import qualified Text.Printf                    as PF (printf)
 
 data DirectDebitsController =
   DD
@@ -217,7 +217,7 @@ mkController' db setMainState c bcLs deLs = do
 
   actualBasePriceEn <- getGladeObject castToEntry  "_actualBasePriceEn" c
   addItemBt         <- getGladeObject castToButton "_addItemBt"         c
-  deleteItemBt      <- getGladeObject castToButton "_deleteBt"          c
+  deleteItemBt      <- getGladeObject castToButton "_deleteItemBt"      c
   set actualBasePriceEn [widgetSensitive := False]
   set addItemBt         [widgetSensitive := False]
   set deleteItemBt      [widgetSensitive := False]
@@ -256,6 +256,33 @@ mkController' db setMainState c bcLs deLs = do
     sortedIter <- treeModelSortConvertChildIterToIter sm newIter
     comboBoxSetActiveIter selector_ sortedIter
     setState (Sel newIter)
-    putStrLn "Clone done."
+
+  deSel <- treeViewGetSelection deTv
+  bcSel <- treeViewGetSelection bcTv
+
+  let onSelChangedAction = do
+        countDeSel <- treeSelectionCountSelectedRows deSel
+        countBcSel <- treeSelectionCountSelectedRows bcSel
+        forM_ [toWidget addItemBt, toWidget actualBasePriceEn] $
+          if countDeSel > 0 && countBcSel > 0
+          then (`set` [widgetSensitive := True])
+          else (`set` [widgetSensitive := False])
+        -- When countBcSel > 0 there should be exactly 1 selected billing concept
+        if countBcSel > 0 then treeSelectionSelectedForeach bcSel $ \iter -> do
+          childIter <- treeModelSortConvertIterToChildIter bcSm iter
+          bcE <- treeModelGetRow bcLs childIter
+          set actualBasePriceEn [entryText := priceToString (DB.entityVal bcE ^. basePrice)]
+        else
+          set actualBasePriceEn [entryText := ""]
+
+  _ <- on deSel treeSelectionSelectionChanged onSelChangedAction
+  _ <- on bcSel treeSelectionSelectionChanged onSelChangedAction
+
+  itemsSel <- treeViewGetSelection (itemsTv c)
+
+  _ <- on itemsSel treeSelectionSelectionChanged $ do
+    countItemsSel <- treeSelectionCountSelectedRows itemsSel
+    set deleteItemBt $
+      if countItemsSel > 0 then [widgetSensitive := True] else [widgetSensitive := False]
 
   return ()
