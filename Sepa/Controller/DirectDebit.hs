@@ -10,9 +10,11 @@ module Sepa.Controller.DirectDebit where
 
 import           Control.Lens                   hiding (element, elements,
                                                  index, set, view)
+import           Control.Arrow
 import           Control.Monad
-import           Data.List                      (groupBy)
+import           Data.List                      (groupBy, sortBy)
 import           Data.Maybe
+import           Data.Ord
 import qualified Data.Text                      as T
 import qualified Data.Time.Calendar             as C
 import qualified Data.Time.LocalTime            as C
@@ -33,6 +35,7 @@ data DirectDebitsController =
   , builder_ :: Builder
   , itemsTv  :: TreeView
   , itemsLs  :: ListStore Item
+  , itemsSm  :: TypedTreeModelSort Item
   }
 
 data Item =
@@ -105,16 +108,7 @@ instance Controller DirectDebitsController where
   readData [descriptionEn, _] c = do
     description_ <- get descriptionEn entryText
     today <- C.getZonedTime
-    -- let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
-    let sameDebtor (Item last1 first1 _ _) (Item last2 first2 _ _)
-          = last1 == last2 && first1 == first2
-    items_  <- listStoreToList (itemsLs c)
-    let items' = groupBy sameDebtor items_
-    debits_ <- forM items' $ \itL -> do
-      -- TRUST: the use of goupBy ensures that length itL >= 0
-      let it = head itL
-      -- TRUST: no invalid debits can be created (so we don't call validDirectDebit)
-      return $ mkDirectDebit (itemFirstName it) (itemLastName it) (itemMandate it) (map item itL)
+    debits_ <- readItems c 
     return DDD { descriptionD  = T.pack description_
                , creationTimeD = today
                , debitsD       = debits_ }
@@ -157,21 +151,17 @@ instance Controller DirectDebitsController where
         let item_ = Item { itemLastName    = dd ^. debtorLastName
                          , itemFirstName   = dd ^. debtorFirstName
                          , itemMandate     = dd ^. mandate
-                         , item            = bc}
+                         , item            = bc }
         listStoreAppend (itemsLs c) item_
     let debits_ = dds ^. debits
-    basePriceEn      <- getGladeObject castToEntry "_basePriceEn"      c
-    finalPriceEn     <- getGladeObject castToEntry "_finalPriceEn"     c
-    numberOfDebitsEn <- getGladeObject castToEntry "_numberOfDebitsEn" c
-    set basePriceEn  [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.basePrice)  debits_]
-    set finalPriceEn [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.finalPrice) debits_]
-    set numberOfDebitsEn [entryText := show (length debits_)]
+    computeAndShowTotals debits_ c
 
 -- | Calls Controller::mkController and then adds special functionality for direct debit
 -- sets.
 mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.BillingConcept)),
                   TreeModelClass (deModel (DB.Entity Sepa.Debtor.Debtor)),
-                  TypedTreeModelClass bcModel, TypedTreeModelClass deModel) =>
+                  TypedTreeModelClass bcModel, TypedTreeModelClass deModel,
+                  deModel ~ ListStore, bcModel ~ ListStore) =>
                  DB.ConnectionPool
               -> (MainWindowState -> IO ())
               -> DirectDebitsController
@@ -183,6 +173,7 @@ mkController' db setMainState c bcLs deLs = do
   let orderings = repeat compare -- TODO: catalan collation
 
   -- FIXME: use treeModelFilterRefilter every time deLs and bcLs could have changed
+  -- TODO: Insert an empty dds in selector (not in the database)
 
   -- billing concepts TreeView
 
@@ -285,4 +276,64 @@ mkController' db setMainState c bcLs deLs = do
     set deleteItemBt $
       if countItemsSel > 0 then [widgetSensitive := True] else [widgetSensitive := False]
 
+  _ <- on addItemBt buttonActivated $ do
+    priceAsString <- get actualBasePriceEn entryText
+    mDeIter <- treeSelectionGetSelected deSel
+    mBcIter <- treeSelectionGetSelected bcSel
+    case (mDeIter, mBcIter) of
+      (Just deIter, Just bcIter) -> do
+        deFilterIter <- treeModelSortConvertIterToChildIter deSm deIter
+        deChildIter  <- treeModelFilterConvertIterToChildIter deFm deFilterIter
+        bcChildIter  <- treeModelSortConvertIterToChildIter bcSm bcIter
+        deE          <- listStoreGetValue deLs (listStoreIterToIndex deChildIter)
+        bcE          <- listStoreGetValue bcLs (listStoreIterToIndex bcChildIter)
+        let bc_   = setBasePrice (stringToPrice priceAsString) (DB.entityVal bcE)
+            item_ = Item { itemLastName    = DB.entityVal deE ^. lastName
+                         , itemFirstName   = DB.entityVal deE ^. firstName
+                         -- WARNING: use of head
+                         -- TRUST: There is at least one mandate, and is active
+                         , itemMandate     = head (DB.entityVal deE ^. mandates)
+                         , item            = bc_ }
+        _index <- listStoreAppend (itemsLs c) item_
+        -- TODO: select appended item and make selection visible
+        -- TODO: cheaper totals calculation (readItems needs to sort)
+        debits_ <- readItems c
+        computeAndShowTotals debits_ c
+      _ -> error "DirectDebitsController::mkController': de or bc iter missing"
+    return ()
+
+  _ <- on deleteItemBt buttonActivated $ do
+    mIter <- treeSelectionGetSelected itemsSel
+    case mIter of
+      Nothing   -> error "DirectDebitsController::mkController': no items iter on deletion"
+      Just iter -> do
+        childIter <- treeModelSortConvertIterToChildIter (itemsSm c) iter
+        listStoreRemove (itemsLs c) (listStoreIterToIndex childIter)
+        -- TODO: cheaper totals calculation (readItems needs to sort)
+        debits_ <- readItems c
+        computeAndShowTotals debits_ c
+
   return ()
+
+readItems :: DirectDebitsController -> IO [DirectDebit]
+readItems c = do
+  let nameEq  (Item last1 fst1 _ _) (Item last2 fst2 _ _) = last1 == last2 && fst1 == fst2
+      -- Lexicographic order, no need of a specific collation
+      nameOrd = comparing (itemLastName &&& itemFirstName)
+                -- can be
+  items_  <- listStoreToList (itemsLs c)
+  let items' = (groupBy nameEq . sortBy nameOrd) items_
+  forM items' $ \itL -> do
+    -- TRUST: the use of goupBy ensures that length itL > 0
+    let it = head itL
+    -- TRUST: no invalid debits can be created (so we don't call validDirectDebit)
+    return $ mkDirectDebit (itemFirstName it) (itemLastName it) (itemMandate it) (map item itL)
+
+computeAndShowTotals :: [DirectDebit] -> DirectDebitsController -> IO ()
+computeAndShowTotals debits_ c = do
+  basePriceEn      <- getGladeObject castToEntry "_basePriceEn"      c
+  finalPriceEn     <- getGladeObject castToEntry "_finalPriceEn"     c
+  numberOfDebitsEn <- getGladeObject castToEntry "_numberOfDebitsEn" c
+  set basePriceEn  [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.basePrice)  debits_]
+  set finalPriceEn [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.finalPrice) debits_]
+  set numberOfDebitsEn [entryText := show (length debits_)]

@@ -1,10 +1,8 @@
-{-# LANGUAGE
-  GADTs,
-  NoImplicitPrelude,
-  OverloadedStrings,
-  TemplateHaskell,
-  TypeFamilies
-  #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Sepa.BillingConcept
        ( -- BillingConcept
@@ -16,20 +14,18 @@ module Sepa.BillingConcept
          vatRatio,
          finalPrice,
          validBillingConcept,
-         priceToText
+         priceToText,
+         setBasePrice
        ) where
 
 import           ClassyPrelude
-import           Control.Lens
-  ((^.))
-import qualified Control.Lens                                                   as L
-  (Conjoined, Contravariant)
-import qualified Control.Lens.Getter                                            as L
-  (to)
-import qualified Database.Persist.Quasi                                         as DB
-  (upperCaseSettings)
-import qualified Database.Persist.TH                                            as DB
-  (mkPersist, mpsGenerateLenses, mpsPrefixFields, persistFileWith, share)
+import           Control.Lens           ((^.), (&), (.~))
+import qualified Control.Lens           as L (Conjoined, Contravariant)
+import qualified Control.Lens.Getter    as L (to)
+import qualified Database.Persist.Quasi as DB (upperCaseSettings)
+import qualified Database.Persist.TH    as DB (mkPersist, mpsGenerateLenses,
+                                               mpsPrefixFields, persistFileWith,
+                                               share)
 import           Sepa.MongoSettings
 
 
@@ -78,3 +74,6 @@ priceToText amount = assert (amount >= 0) $ pack amountWithFractional
           x : y : z : [] ->           z : '.' : y : [x]
           x : y : l      -> reverse l ++ ('.' : y : [x])
           _              -> error "priceToText: show has returned empty list for a number"
+
+setBasePrice :: Int -> BillingConcept -> BillingConcept
+setBasePrice price bc = bc & basePrice .~ price

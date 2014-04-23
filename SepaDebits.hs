@@ -66,7 +66,7 @@ mkMainWindowGui builder_ db = do
 
   let bcController = BC "BC" builder_
       deController = DE "DE" builder_
-      ddController = DD "DD" builder_ itTv itLs
+      ddController = DD "DD" builder_ itTv itLs itSm
       controllers  = [ MkBController bcController
                      , MkBController deController
                      , MkBController ddController
@@ -91,7 +91,7 @@ mkMainWindowGui builder_ db = do
   -- Auxiliary functions
 
   -- FIXME: partial func 'head'
-  let chooserFromId panelId_ = bChooser $ head $ filter ((== panelId_) . bPanelId) controllers
+  let chooserFromId panelId__ = bChooser $ head $ filter ((== panelId__) . bPanelId) controllers
 
   let setState :: MainWindowState -> IO ()
       setState (View i) = do -- st <- readIORef stRef
