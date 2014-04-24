@@ -8,6 +8,7 @@
 
 module Sepa.Controller.DirectDebit where
 
+import qualified ClassyPrelude
 import           Control.Arrow
 import           Control.Lens                   hiding (element, elements,
                                                  index, set, view)
@@ -325,8 +326,26 @@ mkController' db setMainState c bcLs deLs = do
     let dds = DB.entityVal ddsE
     banks <- flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter SpanishBank]) []
     let banksMap = M.fromList $ map (\e -> (DB.entityVal e ^. fourDigitsCode, DB.entityVal e)) banks
-    writeMessageToFile dds banksMap
-
+    fileChsDg <- getGladeObject castToFileChooserDialog "_fileChooserDg" c
+    isSentDg  <- getGladeObject castToDialog            "_isSentDg"      c
+    fileChooserSetCurrentName fileChsDg $ T.unpack (dds ^. description) ++ ".xml"
+    widgetShow fileChsDg
+    fileChsResp <- dialogRun fileChsDg
+    widgetHide fileChsDg
+    case fileChsResp of
+      ResponseCancel       -> return ()
+      ResponseOk           -> do
+        mFilePath <- fileChooserGetFilename fileChsDg
+        case mFilePath of
+          Nothing   -> error "No file name"
+          Just filePath -> do
+            -- FIXME: handle file writing IO error
+            writeMessageToFile dds banksMap (ClassyPrelude.fromString filePath)
+            widgetShow isSentDg
+            isSentResp <- dialogRun isSentDg
+            widgetHide isSentDg
+            -- TODO: response to isSentDg
+      ResponseDeleteEvent  -> return ()
 
   return ()
 

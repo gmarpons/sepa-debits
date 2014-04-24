@@ -370,8 +370,8 @@ renderMessage dds bkM = renderText settings (message dds bkM)
 --
 --   - the one coming with Text.XML puts significant whitespace in content nodes
 --   - the on in Text.XML.Light removes comments and other nasty things
-writeMessageToFile :: DirectDebitSet -> BankMap -> IO ()
-writeMessageToFile dds bkM = do
+writeMessageToFile :: DirectDebitSet -> BankMap -> FilePath -> IO ()
+writeMessageToFile dds bkM filePath = do
   let xmlLines = lines $ renderText (def { rsPretty = True }) (message dds bkM)
       xmlTagAndComment = take 2 xmlLines
       xmlElementL = drop 1 $ LXML.parseXML $ renderText def (message dds bkM)
@@ -380,4 +380,4 @@ writeMessageToFile dds bkM = do
       xmlBS  = LT.encodeUtf8 xmlPP'
   -- TODO: look at text-icu library normalization mode for transliteration and drop
   -- dependency on iconv.
-  writeFile "Test.xml" $ IC.convertFuzzy IC.Transliterate "UTF-8" "ASCII" xmlBS
+  writeFile filePath $ IC.convertFuzzy IC.Transliterate "UTF-8" "ASCII" xmlBS

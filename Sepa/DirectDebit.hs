@@ -26,7 +26,7 @@ module Sepa.DirectDebit
          mandate,
          items,
          validDirectDebit,
-         storableDirectDebit
+         storableDirectDebit,
        ) where
 
 import           ClassyPrelude
@@ -42,7 +42,6 @@ import           Sepa.BillingConcept
 import           Sepa.Creditor
 import           Sepa.Debtor
 import           Sepa.MongoSettings
-
 
 -- WARNING: the use of lenses (setters) can violate the invariants of the Abstract Data
 -- Types in this module.
