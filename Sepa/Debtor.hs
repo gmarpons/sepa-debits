@@ -25,6 +25,7 @@ module Sepa.Debtor
          lastTimeActive,
          isNew,
          validMandate,
+         updateMandateLastTimeActive,
 
          -- SpanishBank
          mkSpanishBank,
@@ -37,14 +38,16 @@ module Sepa.Debtor
        ) where
 
 import           ClassyPrelude
-import           Control.Lens           (Conjoined, Gettable, to, (^.))
-import qualified Data.Char              as CH (isDigit, isUpper)
-import qualified Data.List              as LT
-import qualified Data.Time.Calendar     as T
-import qualified Database.Persist.Quasi as DB (upperCaseSettings)
-import qualified Database.Persist.TH    as DB (mkPersist, mpsGenerateLenses,
-                                               mpsPrefixFields, persistFileWith,
-                                               share)
+import           Control.Lens             (Conjoined, Gettable, to, (^.))
+import qualified Data.Char                as CH (isDigit, isUpper)
+import qualified Data.List                as LT
+import qualified Data.Time.Calendar       as T
+import           Database.Persist         ((==.), (=.))
+import qualified Database.Persist.MongoDB as DB
+import qualified Database.Persist.Quasi   as DB (upperCaseSettings)
+import qualified Database.Persist.TH      as DB (mkPersist, mpsGenerateLenses,
+                                                 mpsPrefixFields,
+                                                 persistFileWith, share)
 import           Sepa.MongoSettings
 import           Sepa.SpanishIban
 
@@ -123,6 +126,11 @@ isNew = to _isNew
 
 _isNew :: Mandate -> Bool
 _isNew = isNothing . (^. lastTimeActive)
+
+updateMandateLastTimeActive :: DB.ConnectionPool -> Text -> T.Day -> IO ()
+updateMandateLastTimeActive db mandateRef_ newDay =
+  flip DB.runMongoDBPoolDef db $
+    DB.updateWhere [MandateRef ==. mandateRef_] [LastTimeActive =. Just newDay]
 
 
 -- Spanish banks

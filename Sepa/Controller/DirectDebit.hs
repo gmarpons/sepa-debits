@@ -352,6 +352,14 @@ mkController' db setMainState c bcLs deLs = do
             isSentResp <- dialogRun isSentDg
             widgetHide isSentDg
             -- TODO: response to isSentDg
+            case isSentResp of
+              ResponseYes -> do
+                -- Update lastTimeActive for all mandates used in dds
+                let ddsDay = C.localDay (C.zonedTimeToLocalTime (dds ^. creationTime))
+                forM_ (dds ^. debits) $ \debit ->
+                  updateMandateLastTimeActive db (debit ^. mandate ^. mandateRef) ddsDay
+              ResponseNo  -> return ()
+              _           -> error "Bad response on isSentDg"
       ResponseDeleteEvent  -> return ()
       _                    -> error "Bad response on file chooser"
 

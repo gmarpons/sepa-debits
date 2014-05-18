@@ -19,7 +19,6 @@ module Sepa.Creditor
        ) where
 
 import           ClassyPrelude
-import           Control.Lens
 import           Database.Persist         ((+=.))
 import qualified Database.Persist.MongoDB as DB
 import qualified Database.Persist.Quasi   as DB (upperCaseSettings)
@@ -58,4 +57,3 @@ incrementCreditorMessageCount :: DB.ConnectionPool -> IO ()
 incrementCreditorMessageCount db =
   -- Update all creditors (should exist exactly one)
   flip DB.runMongoDBPoolDef db $ DB.updateWhere ([] :: [DB.Filter Creditor]) [MessageCount +=. 1]
-
