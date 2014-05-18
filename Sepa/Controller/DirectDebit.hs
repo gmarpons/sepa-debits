@@ -10,18 +10,21 @@ module Sepa.Controller.DirectDebit where
 
 import qualified ClassyPrelude
 import           Control.Arrow
-import           Control.Lens                   hiding (element, elements,
-                                                 index, set, view)
+import           Control.Lens                      hiding (element, elements,
+                                                    index, set, view)
 import           Control.Monad
 import           Data.IORef
-import           Data.List                      (groupBy, sortBy)
-import qualified Data.Map                       as M
+import           Data.List                         (groupBy, sortBy)
+import qualified Data.Map                          as M
 import           Data.Maybe
 import           Data.Ord
-import qualified Data.Text                      as T
-import qualified Data.Time.Calendar             as C
-import qualified Data.Time.LocalTime            as C
-import qualified Database.Persist.MongoDB       as DB
+import qualified Data.Text                         as T
+import qualified Data.Time.Calendar                as C
+import qualified Data.Time.LocalTime               as C
+import qualified Database.Persist.MongoDB          as DB
+import           Graphics.Rendering.Cairo
+import qualified Graphics.Rendering.Cairo.Internal as Cairo.Internal
+import           Graphics.Rendering.Pango
 import           Graphics.UI.Gtk
 import           Sepa.BillingConcept
 import           Sepa.Controller.BillingConcept
@@ -31,7 +34,7 @@ import           Sepa.Creditor
 import           Sepa.Debtor
 import           Sepa.DirectDebit
 import           Sepa.DirectDebitMessageXML
-import qualified Text.Printf                    as PF (printf)
+import qualified Text.Printf                       as PF (printf)
 
 data DirectDebitsController =
   DD
@@ -220,7 +223,18 @@ mkController' db setMainState c bcLs deLs = do
 
   -- Connect buttons
 
+  let getDirectDebitSet selector_ = do
+        mIter <- comboBoxGetActiveIter selector_
+        case mIter of
+          Nothing     -> error "DirectDebitsController::mkController': no combobox iter"
+          (Just iter) -> do
+            childIter <- treeModelSortConvertIterToChildIter sm iter
+            ddsE      <- treeModelGetRow ls childIter
+            return $ DB.entityVal ddsE
+
   cloneBt <- getGladeObject castToButton "_cloneBt" c
+
+  -- Creditor's message count is incremented on dds cloning
 
   _ <- on cloneBt buttonActivated $ do
     selector_ <- selector c
@@ -229,19 +243,12 @@ mkController' db setMainState c bcLs deLs = do
     creditor_ <- case mCreditor of
       Nothing        -> error "DirectDebitsController::mkController': no creditor"
       Just creditorE -> return $ DB.entityVal creditorE
-    let description_ = T.concat [ T.filter (/= ' ') (creditor_ ^. fullName)
-                                , "_"
-                                , T.pack (C.showGregorian today)
-                                , "_"
-                                , T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
+    let description_ = T.concat [      T.filter (/= ' ') (creditor_ ^. fullName)
+                                , "_", T.pack (C.showGregorian today)
+                                , "_", T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
                                 ]
-    mIter <- comboBoxGetActiveIter selector_
-    debits_ <- case mIter of
-      Nothing     -> error "DirectDebitsController::mkController': no combobox iter"
-      (Just iter) -> do
-        childIter <- treeModelSortConvertIterToChildIter sm iter
-        ddsE      <- treeModelGetRow ls childIter
-        return $ DB.entityVal ddsE ^. debits
+    dds <- getDirectDebitSet selector_
+    let debits_ = dds ^. debits
     let newDdsV = mkDirectDebitSet description_ zonedTime creditor_ debits_
     newDdsK <- flip DB.runMongoDBPoolDef db $ DB.insert newDdsV
     listStorePrepend ls (DB.Entity newDdsK newDdsV)
@@ -346,8 +353,104 @@ mkController' db setMainState c bcLs deLs = do
             widgetHide isSentDg
             -- TODO: response to isSentDg
       ResponseDeleteEvent  -> return ()
+      _                    -> error "Bad response on file chooser"
+
+  -- Printing
+
+  mainWd  <- builderGetObject (builder c) castToWindow "mainWd"
+  printBt <- getGladeObject castToButton "_printBt" c
+  printOp <- printOperationNew
+  a4 <- paperSizeNew (Just "iso_a4_210x297mm")
+  pageSetup <- pageSetupNew
+  pageSetupSetPaperSizeAndDefaultMargins pageSetup a4
+  pageSetupSetTopMargin    pageSetup 15 UnitMm
+  pageSetupSetBottomMargin pageSetup 12 UnitMm
+  pageSetupSetLeftMargin   pageSetup 12 UnitMm
+  pageSetupSetRightMargin  pageSetup 50 UnitMm
+  -- FIXME: The following commented line doesn't work
+  -- set pageSetup [ pageSetupOrientation := PageOrientationLandscape ]
+  set printOp   [ printOperationDefaultPageSetup := pageSetup ]
+  set printOp   [ printOperationUseFullPage := True ]
+
+  _ <- on printBt buttonActivated $ do
+    result <- printOperationRun printOp PrintOperationActionPrintDialog mainWd
+    return ()
+
+  _ <- on printOp printOptBeginPrint $ \printCtxt -> do
+    putStrLn "beginPrint"
+    -- selector_ <- selector c
+    -- dds       <- getDirectDebitSet selector_
+    -- height_   <- printContextGetHeight printCtxt
+    -- pangoCtxt <- printContextCreatePangoContext printCtxt
+    -- layout    <- layoutEmpty pangoCtxt
+    -- let debits_ = dds ^. debits
+    -- _ <- liftIO $ layoutSetMarkup layout "<span font_family=\"monospace\" size=\"1000\"></span>"
+    -- (_ink, PangoRectangle _ _ _ lineHeight) <- layoutGetExtents layout
+    -- let linesPerPage = (height_ - 100.0) / lineHeight
+    set printOp [ printOperationNPages := 1 ]
+
+  _ <- on printOp printOptDrawPage $ \printCtxt n -> do
+    putStrLn $ "I'm printing page " ++ show n
+    -- width  <- printContextGetWidth  printCtxt
+    -- height <- printContextGetHeight printCtxt
+    -- putStrLn $ "(" ++ show width ++ ", " ++ show height ++ ")"
+    pageSetup_ <- printContextGetPageSetup printCtxt
+    -- margins <- printContextGetHardMargins printCtxt
+    -- print margins
+    selector_ <- selector c
+    dds       <- getDirectDebitSet selector_
+    cairoCtxt <- printContextGetCairoContext printCtxt
+    pangoCtxt <- printContextCreatePangoContext printCtxt
+    surface   <- Cairo.Internal.getTarget cairoCtxt
+    renderWith surface $ renderDirectDebitSet pangoCtxt pageSetup_ dds
 
   return ()
+
+renderDirectDebitSet :: PangoContext -> PageSetup -> DirectDebitSet -> Render ()
+renderDirectDebitSet pangoCtxt pageSetup dds = do
+  topMargin     <- liftIO $ pageSetupGetTopMargin     pageSetup UnitPoints
+  bottomMargin  <- liftIO $ pageSetupGetBottomMargin  pageSetup UnitPoints
+  leftMargin    <- liftIO $ pageSetupGetLeftMargin    pageSetup UnitPoints
+  rightMargin   <- liftIO $ pageSetupGetRightMargin   pageSetup UnitPoints
+  paperWidth    <- liftIO $ pageSetupGetPaperWidth    pageSetup UnitPoints
+  paperHeight   <- liftIO $ pageSetupGetPaperHeight   pageSetup UnitPoints
+  let printableWidth  = paperWidth - leftMargin - rightMargin
+      maxYPos         = paperHeight - bottomMargin
+      nameWidth       = 0.45 * printableWidth
+      itemWidth       = 0.15 * printableWidth
+      basePriceWidth  = 0.20 * printableWidth
+      finalPriceWidth = 0.20 * printableWidth
+      -- nameXPos        = leftMargin
+      -- itemXPos        = nameXPos      + 0.4 * printableWidth
+      -- basePriceXPos   = itemXPos      + 0.2 * printableWidth
+      -- finalPriceXPos  = basePriceXPos + 0.2 * printableWidth
+  title <- liftIO $ layoutEmpty pangoCtxt
+  _ <- liftIO $ layoutSetMarkup title $ "<b>" ++ T.unpack (dds ^. description) ++ "</b>"
+  moveTo leftMargin topMargin
+  showLayout title
+  (_ink, PangoRectangle _ _ _ titleHeight) <- liftIO $ layoutGetExtents title
+  relMoveTo 0 (2 * titleHeight)
+  forM_ [ ("Nom",        nameWidth,       AlignLeft)
+        , ("Item",       itemWidth,       AlignLeft)
+        , ("Preu base",  basePriceWidth,  AlignRight)
+        , ("Preu final", finalPriceWidth, AlignRight)] $ \(text, width_, align) -> do
+    layout <- liftIO $ layoutEmpty pangoCtxt
+    _ <- liftIO $ layoutSetMarkup layout $ "<i>" ++ text ++ "</i>"
+    liftIO $ layoutSetWidth layout (Just width_)
+    liftIO $ layoutSetAlignment layout align
+    showLayout layout
+    relMoveTo width_ 0
+  (_, yPos) <- getCurrentPoint
+  moveTo leftMargin (yPos + 20)
+  relLineTo printableWidth 0
+  stroke
+
+  -- forM_ (dds ^. debits) $ \debit -> do
+  --   renderDirectDebit leftMargin
+  -- showPage
+
+-- renderDirectDebit :: PangoContext -> Double -> Double -> DirectDebit -> Render ()
+-- renderDirectDebit pangoCtxt xPos yPos debit =
 
 readItems :: DirectDebitsController -> IO [DirectDebit]
 readItems c = do
