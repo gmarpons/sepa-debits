@@ -38,11 +38,12 @@ module Sepa.Debtor
        ) where
 
 import           ClassyPrelude
-import           Control.Lens             (Conjoined, Gettable, to, (^.))
+import           Control.Lens
 import qualified Data.Char                as CH (isDigit, isUpper)
 import qualified Data.List                as LT
 import qualified Data.Time.Calendar       as T
-import           Database.Persist         ((==.), (=.))
+import           Database.Persist         ((=.))
+import           Database.Persist.MongoDB (nestEq, (->.))
 import qualified Database.Persist.MongoDB as DB
 import qualified Database.Persist.Quasi   as DB (upperCaseSettings)
 import qualified Database.Persist.TH      as DB (mkPersist, mpsGenerateLenses,
@@ -128,9 +129,16 @@ _isNew :: Mandate -> Bool
 _isNew = isNothing . (^. lastTimeActive)
 
 updateMandateLastTimeActive :: DB.ConnectionPool -> Text -> T.Day -> IO ()
-updateMandateLastTimeActive db mandateRef_ newDay =
-  flip DB.runMongoDBPoolDef db $
-    DB.updateWhere [MandateRef ==. mandateRef_] [LastTimeActive =. Just newDay]
+updateMandateLastTimeActive db mandateRef_ newDay = do
+  mDebtorE <-flip DB.runMongoDBPoolDef db $
+             DB.selectFirst [Mandates ->. MandateRef `nestEq` mandateRef_] []
+  case mDebtorE of
+    Nothing                        -> error "updateMandateLastTimeActive: no debtor"
+    Just (DB.Entity debtorKey debtor) -> do
+      let mandates' = case debtor ^. mandates of
+            (m : ms) -> (m & lastTimeActive .~ Just newDay) : ms
+            []       -> error "updateMandateLastTimeActive: debtor with no mandates"
+      flip DB.runMongoDBPoolDef db $ DB.update debtorKey [Mandates =. mandates']
 
 
 -- Spanish banks
