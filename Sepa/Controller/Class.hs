@@ -25,6 +25,7 @@ data PanelState c
   | Sel     { _iter :: TreeIter }
   | EditNew { _data :: D c, _isValid :: Bool }
   | EditOld { _iter :: TreeIter, _isValid :: Bool }
+  | EditSub { _iter :: TreeIter, _isValid :: Bool }
 
 --makeLenses ''PanelState
 
@@ -74,13 +75,14 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   editEntries          ::                                                     c -> IO [Entry]
   editWidgets          ::                                                     c -> IO [Widget]
   selectWidgets        ::                                                     c -> IO [Widget]
-  subElemWidgets       ::                                                     c -> IO [Widget]
   renderers            ::                                                     c -> IO [PS c -> String]
   putSubElement        :: TreeIter -> LS c                                 -> c -> IO ()
   putElement'          :: TreeIter -> LS c                                 -> c -> IO ()
   mkSubElemController  :: (TreeModelSortClass sm) =>
                           LS c -> sm -> DB.ConnectionPool
-                       -> IORef (PanelState c)                             -> c -> IO ()
+                       -> IORef (PanelState c) -> (PanelState c -> IO ())  -> c -> IO ()
+  subElemButtons       ::                                                     c -> IO [ToggleButton]
+  setSubElemState      :: PanelState c                                     -> c -> IO ()
 
   -- The following functions have a generally applicable default implementation. Some of
   -- them ar based on conventions for Glade names.
@@ -108,27 +110,29 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
 
   -- Default implementations for some functions
 
-  setSelectorRenderers _ _ _    = return ()
+  setSelectorRenderers _ _ _      = return ()
 
-  setSelectorSorting   _ _ _ _  = return ()
+  setSelectorSorting   _ _ _ _    = return ()
 
-  setSelectorSearching _ _ _ _  = return ()
+  setSelectorSearching _ _ _ _    = return ()
 
-  editEntries _                 = return []
+  editEntries _                   = return []
 
-  editWidgets _                 = return []
+  editWidgets _                   = return []
 
-  selectWidgets _               = return []
+  selectWidgets _                 = return []
 
-  subElemWidgets _              = return []
+  subElemButtons _                = return []
 
-  renderers _                   = return []
+  renderers _                     = return []
 
-  putSubElement _ _ _           = return ()
+  putSubElement _ _ _             = return ()
 
-  putElement'   _ _ _           = return ()
+  putElement'   _ _ _             = return ()
 
-  mkSubElemController _ _ _ _ _ = return ()
+  mkSubElemController _ _ _ _ _ _ = return ()
+
+  setSubElemState _ _             = return ()
 
   panel   c      = builderGetObject (builder c) castToVBox         (panelId c ++ "_Vb")
 
@@ -188,10 +192,6 @@ mkControllerImpl db setMainWdState c = do
 
   -- FIXME: NoSel -> newTb -> Cannot save
 
-  -- We could put most of the variables in the following code (s, e, ls, etc.) under the
-  -- monad M, but prefer to show them to make explicit the dependencies among Gtk
-  -- operations.
-
   selector_  <- selector c
   e          <- elements db c
   ls         <- listStoreNew e
@@ -203,50 +203,57 @@ mkControllerImpl db setMainWdState c = do
   setSelectorSearching selector_ ls sm c
 
   let panelId_ = panelId c
-  newTb_         <- newTb c
-  editTb_        <- editTb c
-  deleteBt_      <- deleteBt c
-  saveBt_        <- saveBt c
-  cancelBt_      <- cancelBt c
-  rs             <- renderers c
-  editEntries_   <- editEntries c
-  editWidgets_   <- editWidgets c
-  selectWidgets_ <- selectWidgets c
-  deleteDg_      <- deleteDg c
-  subElemWidgets_<- subElemWidgets c
+  newTb_           <- newTb c
+  editTb_          <- editTb c
+  deleteBt_        <- deleteBt c
+  saveBt_          <- saveBt c
+  cancelBt_        <- cancelBt c
+  rs               <- renderers c
+  editEntries_     <- editEntries c
+  editWidgets_     <- editWidgets c
+  selectWidgets_   <- selectWidgets c
+  deleteDg_        <- deleteDg c
+  subElemButtons_  <- subElemButtons c
 
   -- Place panel initial state in an IORef
 
   stRef <- newIORef NoSel :: IO (IORef (PanelState c))
 
-  -- Panel state function
+  -- Panel state function.
+  -- FIXME: don't call setMainWdState if not necessary
   let setState' :: PanelState c -> IO ()
-      setState' NoSel = do
+      setState' st@NoSel = do
+        putStrLn "NoSel"
         forM_ editEntries_                    (`set` [widgetSensitive    := False, entryText := ""])
         forM_ editWidgets_                    (`set` [widgetSensitive    := False])
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
-        forM_ subElemWidgets_                 (`set` [widgetSensitive    := False])
         forM_ [deleteBt_, saveBt_, cancelBt_] (`set` [widgetSensitive    := False])
         forM_ [editTb_]                       (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := True ])
         forM_ [newTb_]                        (`set` [widgetSensitive    := True ])
         forM_ [editTb_, newTb_]               (`set` [toggleButtonActive := False])
+        forM_ subElemButtons_                 (`set` [widgetSensitive    := False])
+        forM_ subElemButtons_                 (`set` [toggleButtonActive := False])
+        setSubElemState st c
         setMainWdState (View panelId_)
-      setState' (Sel iter) = do
+      setState' st@(Sel iter) = do
+        putStrLn "Sel"
         putElement iter ls rs editEntries_ c
         forM_ editEntries_                    (`set` [widgetSensitive    := False])
         forM_ editWidgets_                    (`set` [widgetSensitive    := False])
         forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
         forM_ selectWidgets_                  (`set` [widgetSensitive    := True ])
-        forM_ subElemWidgets_                 (`set` [widgetSensitive    := True ])
         forM_ [selector_]                     (`set` [widgetSensitive    := True ])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := True ])
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := True ])
         forM_ [editTb_, newTb_]               (`set` [toggleButtonActive := False])
+        forM_ subElemButtons_                 (`set` [widgetSensitive    := True ])
+        forM_ subElemButtons_                 (`set` [toggleButtonActive := False])
+        setSubElemState st c
         setMainWdState (View panelId_)
-      setState' (EditNew _iter valid) = do
+      setState' st@(EditNew _iter valid) = do
+        putStrLn "EditNew"
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
-        forM_ subElemWidgets_                 (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := False])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
@@ -254,10 +261,13 @@ mkControllerImpl db setMainWdState c = do
         forM_ editWidgets_                    (`set` [widgetSensitive    := True ])
         forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
         forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
+        forM_ subElemButtons_                 (`set` [widgetSensitive    := False])
+        forM_ subElemButtons_                 (`set` [toggleButtonActive := False])
+        setSubElemState st c
         setMainWdState (Edit panelId_)
-      setState' (EditOld _iter valid) = do
+      setState' st@(EditOld _iter valid) = do
+        putStrLn "EditOld"
         forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
-        forM_ subElemWidgets_                 (`set` [widgetSensitive    := False])
         forM_ [selector_]                     (`set` [widgetSensitive    := False])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
@@ -265,6 +275,23 @@ mkControllerImpl db setMainWdState c = do
         forM_ editWidgets_                    (`set` [widgetSensitive    := True ])
         forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
         forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
+        forM_ subElemButtons_                 (`set` [widgetSensitive    := False])
+        forM_ subElemButtons_                 (`set` [toggleButtonActive := False])
+        setSubElemState st c
+        setMainWdState (Edit panelId_)
+      setState' st@(EditSub _iter _valid) = do
+        putStrLn "EditSub"
+        forM_ editEntries_                    (`set` [widgetSensitive    := False])
+        forM_ editWidgets_                    (`set` [widgetSensitive    := False])
+        forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
+        forM_ selectWidgets_                  (`set` [widgetSensitive    := False])
+        forM_ [selector_]                     (`set` [widgetSensitive    := False])
+        forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
+        forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
+        forM_ [editTb_, newTb_]               (`set` [toggleButtonActive := False])
+        forM_ subElemButtons_                 (`set` [widgetSensitive    := True ])
+        forM_ subElemButtons_                 (`set` [toggleButtonActive := True ])
+        setSubElemState st c
         setMainWdState (Edit panelId_)
   let setState :: PanelState c -> IO ()
       setState newSt = do
@@ -318,6 +345,16 @@ mkControllerImpl db setMainWdState c = do
     selectElement iter selector_ sm c
     setState (Sel iter)
 
+  forM_ subElemButtons_ $ \button -> do
+    _ <- on button toggled $ do
+      isActive <- toggleButtonGetActive button
+      when isActive $ do
+        st' <- readIORef stRef
+        case st' of
+          Sel iter -> setState (EditSub iter False)
+          _        -> return ()
+    return ()
+
   -- Change state if validation state changes (check at every edit)
   -- forM_ editEntries_ $ \entry -> on entry editableChanged $ do
   --   st'    <- readIORef stRef
@@ -328,7 +365,7 @@ mkControllerImpl db setMainWdState c = do
   --     (EditOld i vOld, vNew) | vNew /= vOld -> setState (EditOld i vNew)
   --     _                                     -> return ()
 
-  mkSubElemController ls sm db stRef c
+  mkSubElemController ls sm db stRef setState c
   return (setState, stRef, ls, sm)
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> c -> IO b

@@ -15,7 +15,8 @@ module Sepa.Creditor
          mandateCount,
          activity,
          validCreditor,
-         incrementCreditorMessageCount
+         incrementCreditorMessageCount,
+         incrementCreditorMandateCount
        ) where
 
 import           ClassyPrelude
@@ -57,3 +58,8 @@ incrementCreditorMessageCount :: DB.ConnectionPool -> IO ()
 incrementCreditorMessageCount db =
   -- Update all creditors (should exist exactly one)
   flip DB.runMongoDBPoolDef db $ DB.updateWhere ([] :: [DB.Filter Creditor]) [MessageCount +=. 1]
+
+incrementCreditorMandateCount :: DB.ConnectionPool -> IO ()
+incrementCreditorMandateCount db =
+  -- Update all creditors (should exist exactly one)
+  flip DB.runMongoDBPoolDef db $ DB.updateWhere ([] :: [DB.Filter Creditor]) [MandateCount +=. 1]

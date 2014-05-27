@@ -8,7 +8,9 @@
 
 module Sepa.Controller.Debtor where
 
-import           Control.Lens             hiding (element, elements, index, set, view)
+import           Control.Lens             hiding (element, elements, index, set,
+                                           view)
+import           Control.Monad
 import           Data.IORef
 import           Data.List
 import qualified Data.Text                as T (Text, pack, unpack)
@@ -18,7 +20,10 @@ import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
 import           Sepa.Controller.Class
 import           Sepa.Controller.TreeView
+import           Sepa.Creditor
 import           Sepa.Debtor
+import           Sepa.SpanishIban
+import qualified Text.Printf              as PF (printf)
 
 data DebtorsController = DE PanelId Builder
 
@@ -63,22 +68,9 @@ instance Controller DebtorsController where
                      e2 <- getGladeObject castToEntry "_EE_firstNameEn" c
                      return [e1, e2]
 
-  subElemWidgets c = do
-    s1  <- getGladeObject castToWidget "_iban1En" c
-    s2  <- getGladeObject castToWidget "_iban2En" c
-    s3  <- getGladeObject castToWidget "_iban3En" c
-    s4  <- getGladeObject castToWidget "_iban4En" c
-    s5  <- getGladeObject castToWidget "_iban5En" c
-    s6  <- getGladeObject castToWidget "_iban6En" c
-    s7  <- getGladeObject castToWidget "_mandateNewTb" c
-    s8  <- getGladeObject castToWidget "_mandateRefEn" c
-    s9  <- getGladeObject castToWidget "_mandateSignatureEn" c
-    s10 <- getGladeObject castToWidget "_mandateLastTimeActiveEn" c
-    s11 <- getGladeObject castToWidget "_saveMandateBt" c
-    s12 <- getGladeObject castToWidget "_cancelMandateBt" c
-    s13 <- getGladeObject castToWidget "_mandateFormBt" c
-    s14 <- getGladeObject castToWidget "_mandatesTv" c
-    return [s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14]
+  subElemButtons c = do
+    s7  <- getGladeObject castToToggleButton "_mandateNewTb" c
+    return [s7]
 
   readData [lastNameEn, firstNameEn] _ = do
     lastName_    <- get lastNameEn    entryText
@@ -106,25 +98,24 @@ instance Controller DebtorsController where
 
   connectSelector s sm st _c = connectTreeView s sm st
 
+  setSubElemState = setMandatePanelState
+
 putMandate :: TreeIter -> LS DebtorsController -> DebtorsController -> IO ()
 putMandate iter ls c = do
-  iban1En   <- builderGetObject (builder c) castToEntry "DE_iban1En"
-  iban2En   <- builderGetObject (builder c) castToEntry "DE_iban2En"
-  iban3En   <- builderGetObject (builder c) castToEntry "DE_iban3En"
-  iban4En   <- builderGetObject (builder c) castToEntry "DE_iban4En"
-  iban5En   <- builderGetObject (builder c) castToEntry "DE_iban5En"
-  iban6En   <- builderGetObject (builder c) castToEntry "DE_iban6En"
-  newTb_    <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
-  saveBt_   <- builderGetObject (builder c) castToButton "DE_saveMandateBt"
-  cancelBt_ <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
+  iban1En          <- builderGetObject (builder c) castToEntry "DE_iban1En"
+  iban2En          <- builderGetObject (builder c) castToEntry "DE_iban2En"
+  iban3En          <- builderGetObject (builder c) castToEntry "DE_iban3En"
+  iban4En          <- builderGetObject (builder c) castToEntry "DE_iban4En"
+  iban5En          <- builderGetObject (builder c) castToEntry "DE_iban5En"
+  iban6En          <- builderGetObject (builder c) castToEntry "DE_iban6En"
+  newTb_           <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
+  saveBt_          <- builderGetObject (builder c) castToButton "DE_saveMandateBt"
+  cancelBt_        <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
   refEn            <- builderGetObject (builder c) castToEntry "DE_mandateRefEn"
   signatureEn      <- builderGetObject (builder c) castToEntry "DE_mandateSignatureEn"
   lastTimeActiveEn <- builderGetObject (builder c) castToEntry "DE_mandateLastTimeActiveEn"
   mapM_ (`set` [entryText := ""])
     [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En, refEn, signatureEn, lastTimeActiveEn]
-  set newTb_ [widgetSensitive := True]
-  set saveBt_ [widgetSensitive := False]
-  set cancelBt_ [widgetSensitive := False]
   (DB.Entity _key debtor)  <- treeModelGetRow ls iter
   print $ length (debtor ^. mandates)
   zonedTime <- C.getZonedTime
@@ -132,8 +123,10 @@ putMandate iter ls c = do
   case getActiveMandate today debtor of
     Nothing -> putStrLn "Rien"
     Just mandate -> do
-      set refEn          [entryText := T.unpack (mandate ^. mandateRef)]
-      set signatureEn    [entryText := C.showGregorian (mandate ^. signatureDate)]
+      putStrLn $ show mandate
+      set refEn            [entryText := T.unpack (mandate ^. mandateRef)]
+      putStrLn (T.unpack (mandate ^. mandateRef))
+      set signatureEn      [entryText := C.showGregorian (mandate ^. signatureDate)]
       set lastTimeActiveEn [entryText := maybe "" C.showGregorian (mandate ^. lastTimeActive)]
       let (iban1, iban'    ) = splitAt 4 (T.unpack (mandate ^. iban))
           (iban2, iban''   ) = splitAt 4 iban'
@@ -146,40 +139,66 @@ putMandate iter ls c = do
       set iban4En [entryText := iban4]
       set iban5En [entryText := iban5]
       set iban6En [entryText := iban6]
+      putStrLn "End put mandate on entries"
 
 mkMandateController  :: (TreeModelSortClass sm) =>
                         LS DebtorsController
                      -> sm
                      -> DB.ConnectionPool
                      -> IORef (PanelState c)
+                     -> (PanelState c -> IO ())
                      -> DebtorsController
                      -> IO ()
-mkMandateController ls _sm db stRef c = do
-  iban1En   <- builderGetObject (builder c) castToEntry "DE_iban1En"
-  iban2En   <- builderGetObject (builder c) castToEntry "DE_iban2En"
-  iban3En   <- builderGetObject (builder c) castToEntry "DE_iban3En"
-  iban4En   <- builderGetObject (builder c) castToEntry "DE_iban4En"
-  iban5En   <- builderGetObject (builder c) castToEntry "DE_iban5En"
-  iban6En   <- builderGetObject (builder c) castToEntry "DE_iban6En"
-  newTb_   <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
-  saveBt_   <- builderGetObject (builder c) castToButton "DE_saveMandateBt"
-  cancelBt_   <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
-  refEn            <- builderGetObject (builder c) castToEntry "DE_mandateRefEn"
-  signatureEn      <- builderGetObject (builder c) castToEntry "DE_mandateSignatureEn"
-  lastTimeActiveEn <- builderGetObject (builder c) castToEntry "DE_mandateLastTimeActiveEn"
-  zonedTime <- C.getZonedTime
-  let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
+mkMandateController ls _sm db stRef setPanelState c = do
+  iban1En          <- builderGetObject (builder c) castToEntry        "DE_iban1En"
+  iban2En          <- builderGetObject (builder c) castToEntry        "DE_iban2En"
+  iban3En          <- builderGetObject (builder c) castToEntry        "DE_iban3En"
+  iban4En          <- builderGetObject (builder c) castToEntry        "DE_iban4En"
+  iban5En          <- builderGetObject (builder c) castToEntry        "DE_iban5En"
+  iban6En          <- builderGetObject (builder c) castToEntry        "DE_iban6En"
+  newTb_           <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
+  saveBt_          <- builderGetObject (builder c) castToButton       "DE_saveMandateBt"
+  cancelBt_        <- builderGetObject (builder c) castToButton       "DE_cancelMandateBt"
+  refEn            <- builderGetObject (builder c) castToEntry        "DE_mandateRefEn"
+  signatureEn      <- builderGetObject (builder c) castToEntry        "DE_mandateSignatureEn"
+  lastTimeActiveEn <- builderGetObject (builder c) castToEntry        "DE_mandateLastTimeActiveEn"
+  zonedTime        <- C.getZonedTime
+  let today        = C.localDay (C.zonedTimeToLocalTime zonedTime)
+
+  handlers <- forM [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En] $ \entry -> do
+    handler <- on entry editableChanged $ do
+      st <- readIORef stRef
+      case st of
+        (EditSub iter _valid) -> do iban1 <- get iban1En entryText
+                                    iban2 <- get iban2En entryText
+                                    iban3 <- get iban3En entryText
+                                    iban4 <- get iban4En entryText
+                                    iban5 <- get iban5En entryText
+                                    iban6 <- get iban6En entryText
+                                    let iban_ = concat [iban1, iban2, iban3, iban4, iban5, iban6]
+                                    setPanelState (EditSub iter (validSpanishIban (T.pack iban_)))
+        _ -> return ()
+    return handler
+
+  forM_ handlers signalBlock
 
   _ <- on newTb_ toggled $ do
-    mapM_ (`set` [entryText := ""])
-      [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En, refEn, signatureEn, lastTimeActiveEn]
-    set newTb_ [widgetSensitive := False]
-    set saveBt_ [widgetSensitive := True]
-    set cancelBt_ [widgetSensitive := True]
---    (Sel iter) <- readIORef stRef -- WARNING: unsafe pattern
+    -- Widget sensitivity set in Class.hs
+    mapM_ (`set` [entryText := ""]) [ iban1En, iban2En, iban3En, iban4En, iban5En, iban6En
+                                    , signatureEn, lastTimeActiveEn ]
+    mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
+    case mCreditor of
+      Nothing                      -> error "DirectDebitsController::createFromData: no creditor"
+      Just (DB.Entity _ creditor_) -> do
+        let newRef = PF.printf "%012d" (creditor_ ^. mandateCount) ++ "                       "
+        refEn `set` [entryText := newRef]
+    forM_ handlers signalUnblock
+    -- Change of state performed in Class.hs
 
   _ <- on saveBt_ buttonActivated $ do
-    (Sel iter) <- readIORef stRef -- WARNING: unsafe pattern
+    putStrLn "Save bt"
+    forM_ handlers signalBlock
+    (EditSub iter True) <- readIORef stRef -- FIXME: unsafe pattern
     (DB.Entity key oldDebtor)  <- treeModelGetRow ls iter
     iban1 <- get iban1En entryText
     iban2 <- get iban2En entryText
@@ -187,12 +206,67 @@ mkMandateController ls _sm db stRef c = do
     iban4 <- get iban4En entryText
     iban5 <- get iban5En entryText
     iban6 <- get iban6En entryText
-    ref   <- get refEn   entryText
-    let mandate = mkMandate (T.pack ref) (T.pack (iban1++iban2++iban3++iban4++iban5++iban6)) today Nothing
+    ref   <- get refEn   entryText -- entryText filled on newTb_ toggled
+    let iban_     = concat [iban1, iban2, iban3, iban4, iban5, iban6]
+        mandate   = mkMandate (T.pack ref) (T.pack iban_) today Nothing
         mandates_ = oldDebtor ^. mandates
         newDebtor = oldDebtor & mandates .~ (mandate : mandates_)
+    incrementCreditorMandateCount db
     flip DB.runMongoDBPoolDef db $ DB.replace key newDebtor
     let index = listStoreIterToIndex iter
     listStoreSetValue ls index (DB.Entity key newDebtor)
+    setPanelState (Sel iter)
+
+  _ <- on cancelBt_ buttonActivated $ do
+    -- FIXME: setPanelState calls putMandate, but mandate is not shown
+    putStrLn "Cancel bt"
+    forM_ handlers signalBlock
+    (EditSub iter _valid) <- readIORef stRef -- FIXME: unsafe pattern
+    setPanelState (Sel iter)
+    editableDeleteText refEn 0 (-1)          -- Clear entry
 
   return ()
+
+setMandatePanelState :: PanelState DebtorsController -> DebtorsController -> IO ()
+setMandatePanelState st c = do
+  iban1En          <- builderGetObject (builder c) castToEntry        "DE_iban1En"
+  iban2En          <- builderGetObject (builder c) castToEntry        "DE_iban2En"
+  iban3En          <- builderGetObject (builder c) castToEntry        "DE_iban3En"
+  iban4En          <- builderGetObject (builder c) castToEntry        "DE_iban4En"
+  iban5En          <- builderGetObject (builder c) castToEntry        "DE_iban5En"
+  iban6En          <- builderGetObject (builder c) castToEntry        "DE_iban6En"
+  saveBt_          <- builderGetObject (builder c) castToButton       "DE_saveMandateBt"
+  cancelBt_        <- builderGetObject (builder c) castToButton       "DE_cancelMandateBt"
+  refEn            <- builderGetObject (builder c) castToEntry        "DE_mandateRefEn"
+  signatureEn      <- builderGetObject (builder c) castToEntry        "DE_mandateSignatureEn"
+  lastTimeActiveEn <- builderGetObject (builder c) castToEntry        "DE_mandateLastTimeActiveEn"
+  formBt_          <- getGladeObject               castToButton       "_mandateFormBt" c
+  mandatesTv       <- getGladeObject               castToWidget       "_mandatesTv" c
+  let dataWidgets = [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En, refEn,
+                     signatureEn, lastTimeActiveEn]
+
+  -- TODO: make sensitive formBt_ when active mandate present
+  -- newBt is handled in Class.hs
+  case st of
+    NoSel       ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
+                            forM_ dataWidgets                     (`set` [widgetSensitive    := False])
+                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
+                            forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
+    Sel _iter   ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
+                            forM_ dataWidgets                     (`set` [widgetSensitive    := False])
+                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
+                            forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
+    EditNew _ _ ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
+                            forM_ dataWidgets                     (`set` [widgetSensitive    := False])
+                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
+                            forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
+    EditOld _ _ ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
+                            forM_ dataWidgets                     (`set` [widgetSensitive    := False])
+                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
+                            forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
+    EditSub _it valid -> do forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
+                            forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
+                            forM_ dataWidgets                     (`set` [widgetSensitive    := True ])
+                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
+                            forM_ [mandatesTv]                    (`set` [widgetSensitive    := True ])
+
