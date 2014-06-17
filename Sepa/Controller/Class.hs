@@ -307,6 +307,19 @@ mkControllerImpl db setMainWdState c = do
 
   onSelectionChangedAction <- connectSelector selector_ sm setState c
 
+  -- Change state if validation state changes (check at every edit)
+  handlers <- forM editEntries_ $ \entry -> on entry editableChanged $ do
+    st'    <- readIORef stRef
+    d      <- readData editEntries_ c
+    v      <- validData d c
+    case (st', v) of
+      (EditNew s vOld, vNew) | vNew /= vOld -> setState (EditNew s vNew)
+      (EditOld i vOld, vNew) | vNew /= vOld -> setState (EditOld i vNew)
+      _                                     -> return ()
+
+  forM_ handlers signalBlock
+
+  _ <- on cancelBt_ buttonActivated $ forM_ handlers signalBlock
   _ <- on cancelBt_ buttonActivated onSelectionChangedAction
 
   _ <- on editTb_ toggled $ do
@@ -319,6 +332,7 @@ mkControllerImpl db setMainWdState c = do
       d <- readData editEntries_ c
       v <- validData d c
       setState (EditOld iter v)
+      forM_ handlers signalUnblock
 
   _ <- on newTb_ toggled $ do
     isActive <- toggleButtonGetActive newTb_
@@ -327,6 +341,7 @@ mkControllerImpl db setMainWdState c = do
       d <- readData editEntries_ c
       v <- validData d c
       setState (EditNew d v)
+      forM_ handlers signalUnblock
 
   _ <- on deleteBt_ buttonActivated $ do
     (Sel iter) <- readIORef stRef -- FIXME: unsafe pattern
@@ -337,6 +352,7 @@ mkControllerImpl db setMainWdState c = do
       setState NoSel
 
   _ <- on saveBt_ buttonActivated $ do
+    forM_ handlers signalBlock
     st' <- readIORef stRef
     iter <- case st' of
       EditNew _    True -> insertElement      ls db editEntries_ c
@@ -354,16 +370,6 @@ mkControllerImpl db setMainWdState c = do
           Sel iter -> setState (EditSub iter False)
           _        -> return ()
     return ()
-
-  -- Change state if validation state changes (check at every edit)
-  -- forM_ editEntries_ $ \entry -> on entry editableChanged $ do
-  --   st'    <- readIORef stRef
-  --   d      <- readData c editEntries_
-  --   v      <- validData c d
-  --   case (st', v) of
-  --     (EditNew s vOld, vNew) | vNew /= vOld -> setState (EditNew s vNew)
-  --     (EditOld i vOld, vNew) | vNew /= vOld -> setState (EditOld i vNew)
-  --     _                                     -> return ()
 
   mkSubElemController ls sm db stRef setState c
   return (setState, stRef, ls, sm)

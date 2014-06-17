@@ -123,9 +123,7 @@ putMandate iter ls c = do
   case getActiveMandate today debtor of
     Nothing -> putStrLn "Rien"
     Just mandate -> do
-      putStrLn $ show mandate
       set refEn            [entryText := T.unpack (mandate ^. mandateRef)]
-      putStrLn (T.unpack (mandate ^. mandateRef))
       set signatureEn      [entryText := C.showGregorian (mandate ^. signatureDate)]
       set lastTimeActiveEn [entryText := maybe "" C.showGregorian (mandate ^. lastTimeActive)]
       let (iban1, iban'    ) = splitAt 4 (T.unpack (mandate ^. iban))
@@ -139,7 +137,6 @@ putMandate iter ls c = do
       set iban4En [entryText := iban4]
       set iban5En [entryText := iban5]
       set iban6En [entryText := iban6]
-      putStrLn "End put mandate on entries"
 
 mkMandateController  :: (TreeModelSortClass sm) =>
                         LS DebtorsController
@@ -165,8 +162,8 @@ mkMandateController ls _sm db stRef setPanelState c = do
   zonedTime        <- C.getZonedTime
   let today        = C.localDay (C.zonedTimeToLocalTime zonedTime)
 
-  handlers <- forM [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En] $ \entry -> do
-    handler <- on entry editableChanged $ do
+  handlers <- forM [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En] $ \entry ->
+    on entry editableChanged $ do
       st <- readIORef stRef
       case st of
         (EditSub iter _valid) -> do iban1 <- get iban1En entryText
@@ -178,7 +175,6 @@ mkMandateController ls _sm db stRef setPanelState c = do
                                     let iban_ = concat [iban1, iban2, iban3, iban4, iban5, iban6]
                                     setPanelState (EditSub iter (validSpanishIban (T.pack iban_)))
         _ -> return ()
-    return handler
 
   forM_ handlers signalBlock
 
@@ -196,7 +192,6 @@ mkMandateController ls _sm db stRef setPanelState c = do
     -- Change of state performed in Class.hs
 
   _ <- on saveBt_ buttonActivated $ do
-    putStrLn "Save bt"
     forM_ handlers signalBlock
     (EditSub iter True) <- readIORef stRef -- FIXME: unsafe pattern
     (DB.Entity key oldDebtor)  <- treeModelGetRow ls iter
@@ -218,12 +213,13 @@ mkMandateController ls _sm db stRef setPanelState c = do
     setPanelState (Sel iter)
 
   _ <- on cancelBt_ buttonActivated $ do
-    -- FIXME: setPanelState calls putMandate, but mandate is not shown
-    putStrLn "Cancel bt"
     forM_ handlers signalBlock
     (EditSub iter _valid) <- readIORef stRef -- FIXME: unsafe pattern
-    setPanelState (Sel iter)
-    editableDeleteText refEn 0 (-1)          -- Clear entry
+    debtorsTreeView  <- selector c
+    selection <- treeViewGetSelection debtorsTreeView
+    path <- treeModelGetPath ls iter
+    treeSelectionUnselectPath selection path
+    treeSelectionSelectPath   selection path -- Indirectly changes state
 
   return ()
 
