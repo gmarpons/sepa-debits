@@ -28,8 +28,8 @@ instance Controller BillingConceptsController where
   type S BillingConceptsController = TreeView
 
   data D BillingConceptsController =
-    DBC { longNameD    :: T.Text
-        , shortNameD   :: T.Text
+    DBC { shortNameD   :: T.Text
+        , longNameD    :: T.Text
         , basePriceD   :: Maybe Int
         , vatRatioD    :: Maybe Int }
 
@@ -74,18 +74,18 @@ instance Controller BillingConceptsController where
     shortName_   <- get shortNameEn   entryText
     basePrice_   <- get basePriceEn   entryText
     vatRatio_    <- get vatRatioEn    entryText
-    return DBC { longNameD   = T.strip (T.pack longName_)
-               , shortNameD  = T.strip (T.pack shortName_)
+    return DBC { shortNameD  = T.strip (T.pack shortName_)
+               , longNameD   = T.strip (T.pack longName_)
                , basePriceD  = Just (stringToPrice basePrice_)
                , vatRatioD   = Just (stringToPrice vatRatio_)
                }
   readData _ _ = error "readData (BC): wrong number of entries"
 
   validData d _ =
-    return $ validBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
+    return $ validBillingConcept (shortNameD d) (longNameD d) (basePriceD d) (vatRatioD d)
 
   createFromData d _db _c =
-    return $ mkBillingConcept (longNameD d) (shortNameD d) (basePriceD d) (vatRatioD d)
+    return $ mkBillingConcept (shortNameD d) (longNameD d) (basePriceD d) (vatRatioD d)
 
   updateFromData d _old = createFromData d
 
