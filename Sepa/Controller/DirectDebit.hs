@@ -357,10 +357,10 @@ mkController' db setMainState c bcLs deLs = do
             widgetShow isSentDg
             isSentResp <- dialogRun isSentDg
             widgetHide isSentDg
-            -- TODO: response to isSentDg
             case isSentResp of
               ResponseYes -> do
                 -- Update lastTimeActive for all mandates used in dds
+                -- TODO: update mandate info in debtors panel
                 let ddsDay = C.localDay (C.zonedTimeToLocalTime (dds ^. creationTime))
                 forM_ (dds ^. debits) $ \debit ->
                   updateMandateLastTimeActive db (debit ^. mandate ^. mandateRef) ddsDay
@@ -373,50 +373,36 @@ mkController' db setMainState c bcLs deLs = do
 
   mainWd  <- builderGetObject (builder c) castToWindow "mainWd"
   printBt <- getGladeObject castToButton "_printBt" c
-  printOp <- printOperationNew
-  a4 <- paperSizeNew (Just "iso_a4_210x297mm")
-  pageSetup <- pageSetupNew
-  pageSetupSetPaperSizeAndDefaultMargins pageSetup a4
-  pageSetupSetTopMargin    pageSetup 15 UnitMm
-  pageSetupSetBottomMargin pageSetup 12 UnitMm
-  pageSetupSetLeftMargin   pageSetup 12 UnitMm
-  pageSetupSetRightMargin  pageSetup 50 UnitMm
-  -- FIXME: The following commented line doesn't work
-  -- set pageSetup [ pageSetupOrientation := PageOrientationLandscape ]
-  set printOp   [ printOperationDefaultPageSetup := pageSetup ]
-  set printOp   [ printOperationUseFullPage := True ]
 
   _ <- on printBt buttonActivated $ do
+    printOp <- printOperationNew
+    a4 <- paperSizeNew (Just "iso_a4_210x297mm")
+    pageSetup <- pageSetupNew
+    pageSetupSetPaperSizeAndDefaultMargins pageSetup a4
+    pageSetupSetTopMargin    pageSetup 15 UnitMm
+    pageSetupSetBottomMargin pageSetup 12 UnitMm
+    pageSetupSetLeftMargin   pageSetup 12 UnitMm
+    pageSetupSetRightMargin  pageSetup 50 UnitMm
+    -- FIXME: The following commented line doesn't work
+    -- set pageSetup [ pageSetupOrientation := PageOrientationLandscape ]
+    set printOp   [ printOperationDefaultPageSetup := pageSetup ]
+    set printOp   [ printOperationUseFullPage := True ]
     result <- printOperationRun printOp PrintOperationActionPrintDialog mainWd
+
+    _ <- on printOp printOptBeginPrint $ \printCtxt ->
+      set printOp [ printOperationNPages := 1 ]
+
+    _ <- on printOp printOptDrawPage $ \printCtxt n -> do
+      putStrLn $ "I'm printing page " ++ show n
+      pageSetup_ <- printContextGetPageSetup printCtxt
+      selector_ <- selector c
+      dds       <- getDirectDebitSet selector_
+      cairoCtxt <- printContextGetCairoContext printCtxt
+      pangoCtxt <- printContextCreatePangoContext printCtxt
+      surface   <- Cairo.Internal.getTarget cairoCtxt
+      renderWith surface $ renderDirectDebitSet pangoCtxt pageSetup_ dds
+
     return ()
-
-  _ <- on printOp printOptBeginPrint $ \printCtxt -> do
-    putStrLn "beginPrint"
-    -- selector_ <- selector c
-    -- dds       <- getDirectDebitSet selector_
-    -- height_   <- printContextGetHeight printCtxt
-    -- pangoCtxt <- printContextCreatePangoContext printCtxt
-    -- layout    <- layoutEmpty pangoCtxt
-    -- let debits_ = dds ^. debits
-    -- _ <- liftIO $ layoutSetMarkup layout "<span font_family=\"monospace\" size=\"1000\"></span>"
-    -- (_ink, PangoRectangle _ _ _ lineHeight) <- layoutGetExtents layout
-    -- let linesPerPage = (height_ - 100.0) / lineHeight
-    set printOp [ printOperationNPages := 1 ]
-
-  _ <- on printOp printOptDrawPage $ \printCtxt n -> do
-    putStrLn $ "I'm printing page " ++ show n
-    -- width  <- printContextGetWidth  printCtxt
-    -- height <- printContextGetHeight printCtxt
-    -- putStrLn $ "(" ++ show width ++ ", " ++ show height ++ ")"
-    pageSetup_ <- printContextGetPageSetup printCtxt
-    -- margins <- printContextGetHardMargins printCtxt
-    -- print margins
-    selector_ <- selector c
-    dds       <- getDirectDebitSet selector_
-    cairoCtxt <- printContextGetCairoContext printCtxt
-    pangoCtxt <- printContextCreatePangoContext printCtxt
-    surface   <- Cairo.Internal.getTarget cairoCtxt
-    renderWith surface $ renderDirectDebitSet pangoCtxt pageSetup_ dds
 
   return ()
 
@@ -434,12 +420,14 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
       itemWidth       = 0.15 * printableWidth
       basePriceWidth  = 0.20 * printableWidth
       finalPriceWidth = 0.20 * printableWidth
-      -- nameXPos        = leftMargin
-      -- itemXPos        = nameXPos      + 0.4 * printableWidth
-      -- basePriceXPos   = itemXPos      + 0.2 * printableWidth
-      -- finalPriceXPos  = basePriceXPos + 0.2 * printableWidth
+  let tableFont    = ("<span size=\"9000\">",     "</span>")
+      titleFont    = ("<span size=\"11000\"><b>", "</b></span>")
+      tableHdrFont = (fst tableFont ++ "<i>",     "</i>" ++ snd tableFont)
+  stub <- liftIO $ layoutEmpty pangoCtxt
+  _ <- liftIO $ layoutSetMarkup stub $ fst tableFont ++ "" ++ snd tableFont
+  (_ink, PangoRectangle _ _ _ tableFontHeight) <- liftIO $ layoutGetExtents stub
   title <- liftIO $ layoutEmpty pangoCtxt
-  _ <- liftIO $ layoutSetMarkup title $ "<b>" ++ T.unpack (dds ^. description) ++ "</b>"
+  _ <- liftIO $ layoutSetMarkup title $ fst titleFont ++ T.unpack (dds ^. description) ++ snd titleFont
   moveTo leftMargin topMargin
   showLayout title
   (_ink, PangoRectangle _ _ _ titleHeight) <- liftIO $ layoutGetExtents title
@@ -449,15 +437,27 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
         , ("Preu base",  basePriceWidth,  AlignRight)
         , ("Preu final", finalPriceWidth, AlignRight)] $ \(text, width_, align) -> do
     layout <- liftIO $ layoutEmpty pangoCtxt
-    _ <- liftIO $ layoutSetMarkup layout $ "<i>" ++ text ++ "</i>"
+    _ <- liftIO $ layoutSetMarkup layout $ fst tableHdrFont ++ text ++ snd tableHdrFont
     liftIO $ layoutSetWidth layout (Just width_)
     liftIO $ layoutSetAlignment layout align
     showLayout layout
     relMoveTo width_ 0
   (_, yPos) <- getCurrentPoint
-  moveTo leftMargin (yPos + 20)
+  moveTo leftMargin (yPos + tableFontHeight)
   relLineTo printableWidth 0
   stroke
+  moveTo leftMargin (yPos + tableFontHeight + 4)
+  let fstDebit = head (dds ^. debits)
+  forM_ [ (T.unpack (fstDebit ^. debtorLastName),        nameWidth,       AlignLeft)
+        , ("Item",       itemWidth,       AlignLeft)
+        , ("Preu base",  basePriceWidth,  AlignRight)
+        , ("Preu final", finalPriceWidth, AlignRight)] $ \(text, width_, align) -> do
+    layout <- liftIO $ layoutEmpty pangoCtxt
+    _ <- liftIO $ layoutSetMarkup layout $ fst tableFont ++ text ++ snd tableFont
+    liftIO $ layoutSetWidth layout (Just width_)
+    liftIO $ layoutSetAlignment layout align
+    showLayout layout
+    relMoveTo width_ 0
 
   -- forM_ (dds ^. debits) $ \debit -> do
   --   renderDirectDebit leftMargin
