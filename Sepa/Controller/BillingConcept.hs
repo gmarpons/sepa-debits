@@ -13,7 +13,6 @@ import           Data.List
 import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
 import qualified Data.Text.Lazy           as TL (unpack)
 import qualified Database.Persist.MongoDB as DB
-import           Formatting               hiding (builder)
 import           Graphics.UI.Gtk
 import           Sepa.Controller.Class
 import           Sepa.Controller.TreeView
@@ -97,14 +96,11 @@ instance Controller BillingConceptsController where
 
   connectSelector s sm st _c = connectTreeView s sm st
 
--- TODO: Merge this function with BC.priceToText
--- | We pad with spaces, to correct show prices in right-aligned columns.
 priceToString :: Int -> String
-priceToString num = TL.unpack $ format (left padding ' ') (toText num)
+priceToString num = T.unpack $ toText num
   where
     toText    = T.replace "." (T.pack separator) . priceToText
     separator = ","             -- FIXME: Take separator from locale
-    padding   = 10
 
 -- | Pre: @str@ contains a decimal number with a maximum of two digits fractional parts
 -- (possibly surrounded by blanks, that @read@ ignores).
