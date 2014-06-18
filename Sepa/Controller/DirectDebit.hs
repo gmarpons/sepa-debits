@@ -223,6 +223,8 @@ mkController' db setMainState c bcLs deLs = do
 
   -- Connect buttons
 
+  priceEntryIdRef <- mkPriceEntry actualBasePriceEn
+
   let getDirectDebitSet selector_ = do
         mIter <- comboBoxGetActiveIter selector_
         case mIter of
@@ -274,9 +276,13 @@ mkController' db setMainState c bcLs deLs = do
         if countBcSel > 0 then treeSelectionSelectedForeach bcSel $ \iter -> do
           childIter <- treeModelSortConvertIterToChildIter bcSm iter
           bcE <- treeModelGetRow bcLs childIter
+          do { priceEntryId <- readIORef priceEntryIdRef; signalBlock priceEntryId }
           set actualBasePriceEn [entryText := priceToString (DB.entityVal bcE ^. basePrice)]
-        else
+          do { priceEntryId <- readIORef priceEntryIdRef; signalUnblock priceEntryId }
+        else do
+          do { priceEntryId <- readIORef priceEntryIdRef; signalBlock priceEntryId }
           set actualBasePriceEn [entryText := ""]
+          do { priceEntryId <- readIORef priceEntryIdRef; signalUnblock priceEntryId }
 
   _ <- on deSel treeSelectionSelectionChanged onSelChangedAction
   _ <- on bcSel treeSelectionSelectionChanged onSelChangedAction

@@ -311,32 +311,8 @@ mkControllerImpl db setMainWdState c = do
   -- Connect panel widgets
 
   -- On insert on price entries, check if digit or separator
-
-  priceEntriesIdRefs <- forM priceEntries_ $ \entry -> do
-    idRef <- newIORef undefined
-    id_ <- on entry insertText $ \str pos -> do
-      id_ <- readIORef idRef
-      signalBlock id_
-      old <- editableGetChars entry 0 (-1)
-      pos' <- if length str == 1 then do
-          let separator = ','       -- FIXME: Take separator from locale
-          let (oldI, oldF) = break (== separator) old
-          let str' = case (length oldI, length oldF, pos) of
-                (i, 0, p) | i - p <= 2 -> filter (\c_ -> isDigit c_ || c_ == ',') str
-                (i, 0, p) | i - p >  2 -> filter isDigit str -- Sep. would be too far left
-                (_, 1, _)              -> filter isDigit str -- Sep. but 0 fract. digits
-                (_, 2, _)              -> filter isDigit str -- Sep. and 1 fract. digit
-                (i, 3, p) | p <= i     -> filter isDigit str -- We're on integer part
-                (i, 3, p) | p >  i     -> ""                 -- Too many fractional digits
-                _                      -> error "on priceEntry insertText"
-          editableInsertText entry str' pos
-        else return pos
-      signalUnblock id_
-      stopInsertText id_
-      return pos'
-    writeIORef idRef id_
-    signalBlock id_
-    return idRef
+  priceEntriesIdRefs <- forM priceEntries_ mkPriceEntry
+  forM_ priceEntriesIdRefs $ \ref -> do { id_ <- readIORef ref; signalBlock id_ }
 
   onSelectionChangedAction <- connectSelector selector_ sm setState c
 
@@ -411,6 +387,32 @@ mkControllerImpl db setMainWdState c = do
 
   mkSubElemController ls sm db stRef setState c
   return (setState, stRef, ls, sm)
+
+mkPriceEntry :: Entry -> IO (IORef (ConnectId Entry))
+mkPriceEntry entry = do
+  idRef <- newIORef undefined
+  id_ <- on entry insertText $ \str pos -> do
+    id_ <- readIORef idRef
+    signalBlock id_
+    old <- editableGetChars entry 0 (-1)
+    pos' <- if length str == 1 then do
+        let separator = ','       -- FIXME: Take separator from locale
+        let (oldI, oldF) = break (== separator) old
+        let str' = case (length oldI, length oldF, pos) of
+              (i, 0, p) | i - p <= 2 -> filter (\c_ -> isDigit c_ || c_ == ',') str
+              (i, 0, p) | i - p >  2 -> filter isDigit str -- Sep. would be too far left
+              (_, 1, _)              -> filter isDigit str -- Sep. but 0 fract. digits
+              (_, 2, _)              -> filter isDigit str -- Sep. and 1 fract. digit
+              (i, 3, p) | p <= i     -> filter isDigit str -- We're on integer part
+              (i, 3, p) | p >  i     -> ""                 -- Too many fractional digits
+              _                      -> error "on priceEntry insertText"
+        editableInsertText entry str' pos
+      else return pos
+    signalUnblock id_
+    stopInsertText id_
+    return pos'
+  writeIORef idRef id_
+  return idRef
 
 getGladeObject :: (GObjectClass b, Controller c) => (GObject -> b) -> String -> c -> IO b
 getGladeObject cast name c =
