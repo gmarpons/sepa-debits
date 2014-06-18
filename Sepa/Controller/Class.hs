@@ -1,12 +1,13 @@
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Sepa.Controller.Class where
 
 import           Control.Monad
+import           Data.Char                (isDigit)
 import           Data.IORef
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
@@ -73,6 +74,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   setSelectorSorting   :: (TreeSortableClass sm)  => S c -> LS c -> sm     -> c -> IO ()
   setSelectorSearching :: (TreeModelSortClass sm) => S c -> LS c -> sm     -> c -> IO ()
   editEntries          ::                                                     c -> IO [Entry]
+  priceEntries         ::                                                     c -> IO [Entry]
   editWidgets          ::                                                     c -> IO [Widget]
   selectWidgets        ::                                                     c -> IO [Widget]
   renderers            ::                                                     c -> IO [PS c -> String]
@@ -117,6 +119,8 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
   setSelectorSearching _ _ _ _    = return ()
 
   editEntries _                   = return []
+
+  priceEntries _                  = return []
 
   editWidgets _                   = return []
 
@@ -210,6 +214,7 @@ mkControllerImpl db setMainWdState c = do
   cancelBt_        <- cancelBt c
   rs               <- renderers c
   editEntries_     <- editEntries c
+  priceEntries_    <- priceEntries c
   editWidgets_     <- editWidgets c
   selectWidgets_   <- selectWidgets c
   deleteDg_        <- deleteDg c
@@ -305,6 +310,34 @@ mkControllerImpl db setMainWdState c = do
 
   -- Connect panel widgets
 
+  -- On insert on price entries, check if digit or separator
+
+  priceEntriesIdRefs <- forM priceEntries_ $ \entry -> do
+    idRef <- newIORef undefined
+    id_ <- on entry insertText $ \str pos -> do
+      id_ <- readIORef idRef
+      signalBlock id_
+      old <- editableGetChars entry 0 (-1)
+      pos' <- if length str == 1 then do
+          let separator = ','       -- FIXME: Take separator from locale
+          let (oldI, oldF) = break (== separator) old
+          let str' = case (length oldI, length oldF, pos) of
+                (i, 0, p) | i - p <= 2 -> filter (\c_ -> isDigit c_ || c_ == ',') str
+                (i, 0, p) | i - p >  2 -> filter isDigit str -- Sep. would be too far left
+                (_, 1, _)              -> filter isDigit str -- Sep. but 0 fract. digits
+                (_, 2, _)              -> filter isDigit str -- Sep. and 1 fract. digit
+                (i, 3, p) | p <= i     -> filter isDigit str -- We're on integer part
+                (i, 3, p) | p >  i     -> ""                 -- Too many fractional digits
+                _                      -> error "on priceEntry insertText"
+          editableInsertText entry str' pos
+        else return pos
+      signalUnblock id_
+      stopInsertText id_
+      return pos'
+    writeIORef idRef id_
+    signalBlock id_
+    return idRef
+
   onSelectionChangedAction <- connectSelector selector_ sm setState c
 
   -- Change state if validation state changes (check at every edit)
@@ -319,8 +352,10 @@ mkControllerImpl db setMainWdState c = do
 
   forM_ handlers signalBlock
 
-  _ <- on cancelBt_ buttonActivated $ forM_ handlers signalBlock
-  _ <- on cancelBt_ buttonActivated onSelectionChangedAction
+  _ <- on cancelBt_ buttonActivated $ do
+       forM_ handlers signalBlock
+       forM_ priceEntriesIdRefs $ \ref -> do { id_ <- readIORef ref; signalBlock id_ }
+       onSelectionChangedAction
 
   _ <- on editTb_ toggled $ do
     isActive <- toggleButtonGetActive editTb_
@@ -333,6 +368,7 @@ mkControllerImpl db setMainWdState c = do
       v <- validData d c
       setState (EditOld iter v)
       forM_ handlers signalUnblock
+      forM_ priceEntriesIdRefs $ \ref -> do { id_ <- readIORef ref; signalUnblock id_ }
 
   _ <- on newTb_ toggled $ do
     isActive <- toggleButtonGetActive newTb_
@@ -342,6 +378,7 @@ mkControllerImpl db setMainWdState c = do
       v <- validData d c
       setState (EditNew d v)
       forM_ handlers signalUnblock
+      forM_ priceEntriesIdRefs $ \ref -> do { id_ <- readIORef ref; signalUnblock id_ }
 
   _ <- on deleteBt_ buttonActivated $ do
     (Sel iter) <- readIORef stRef -- FIXME: unsafe pattern
@@ -353,6 +390,7 @@ mkControllerImpl db setMainWdState c = do
 
   _ <- on saveBt_ buttonActivated $ do
     forM_ handlers signalBlock
+    forM_ priceEntriesIdRefs $ \ref -> do { id_ <- readIORef ref; signalBlock id_ }
     st' <- readIORef stRef
     iter <- case st' of
       EditNew _    True -> insertElement      ls db editEntries_ c

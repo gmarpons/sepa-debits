@@ -62,12 +62,16 @@ instance Controller BillingConceptsController where
                        , priceToString . (^. finalPrice) . DB.entityVal
                        ]
 
-  editEntries c = do e1 <- getGladeObject castToEntry "_EE_longNameEn"   c
-                     e2 <- getGladeObject castToEntry "_EE_shortNameEn"  c
-                     e3 <- getGladeObject castToEntry "_EE_basePriceEn"  c
-                     e4 <- getGladeObject castToEntry "_EE_vatRatioEn"   c
-                     e5 <- getGladeObject castToEntry "_EE_finalPriceEn" c
-                     return [e1, e2, e3, e4, e5]
+  editEntries c =  do e1 <- getGladeObject castToEntry "_EE_longNameEn"   c
+                      e2 <- getGladeObject castToEntry "_EE_shortNameEn"  c
+                      e3 <- getGladeObject castToEntry "_EE_basePriceEn"  c
+                      e4 <- getGladeObject castToEntry "_EE_vatRatioEn"   c
+                      e5 <- getGladeObject castToEntry "_EE_finalPriceEn" c
+                      return [e1, e2, e3, e4, e5]
+
+  priceEntries c = do e3 <- getGladeObject castToEntry "_EE_basePriceEn"  c
+                      e4 <- getGladeObject castToEntry "_EE_vatRatioEn"   c
+                      return [e3, e4]
 
   readData [longNameEn, shortNameEn, basePriceEn, vatRatioEn, _] _ = do
     longName_    <- get longNameEn    entryText
@@ -101,8 +105,6 @@ priceToString num = TL.unpack $ format (left padding ' ') (toText num)
     toText    = T.replace "." (T.pack separator) . priceToText
     separator = ","             -- FIXME: Take separator from locale
     padding   = 10
-
--- TODO: set signal on all numeric entries to guarantee only valid chars
 
 -- | Pre: @str@ contains a decimal number with a maximum of two digits fractional parts
 -- (possibly surrounded by blanks, that @read@ ignores).
