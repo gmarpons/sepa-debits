@@ -387,7 +387,6 @@ mkController' db setMainState c bcLs deLs = do
     -- set pageSetup [ pageSetupOrientation := PageOrientationLandscape ]
     set printOp   [ printOperationDefaultPageSetup := pageSetup ]
     set printOp   [ printOperationUseFullPage := True ]
-    result <- printOperationRun printOp PrintOperationActionPrintDialog mainWd
 
     _ <- on printOp printOptBeginPrint $ \printCtxt ->
       set printOp [ printOperationNPages := 1 ]
@@ -395,13 +394,14 @@ mkController' db setMainState c bcLs deLs = do
     _ <- on printOp printOptDrawPage $ \printCtxt n -> do
       putStrLn $ "I'm printing page " ++ show n
       pageSetup_ <- printContextGetPageSetup printCtxt
-      selector_ <- selector c
-      dds       <- getDirectDebitSet selector_
-      cairoCtxt <- printContextGetCairoContext printCtxt
-      pangoCtxt <- printContextCreatePangoContext printCtxt
-      surface   <- Cairo.Internal.getTarget cairoCtxt
+      selector_  <- selector c
+      dds        <- getDirectDebitSet selector_
+      cairoCtxt  <- printContextGetCairoContext printCtxt
+      pangoCtxt  <- printContextCreatePangoContext printCtxt
+      surface    <- Cairo.Internal.getTarget cairoCtxt
       renderWith surface $ renderDirectDebitSet pangoCtxt pageSetup_ dds
 
+    result <- printOperationRun printOp PrintOperationActionPrintDialog mainWd
     return ()
 
   return ()
@@ -461,7 +461,7 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
 
   -- forM_ (dds ^. debits) $ \debit -> do
   --   renderDirectDebit leftMargin
-  -- showPage
+  showPage
 
 -- renderDirectDebit :: PangoContext -> Double -> Double -> DirectDebit -> Render ()
 -- renderDirectDebit pangoCtxt xPos yPos debit =
