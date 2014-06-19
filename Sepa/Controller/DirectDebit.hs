@@ -426,16 +426,30 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
       tableHdrFont = (fst tableFont ++ "<i>",     "</i>" ++ snd tableFont)
   stub <- liftIO $ layoutEmpty pangoCtxt
   _ <- liftIO $ layoutSetMarkup stub $ fst tableFont ++ "" ++ snd tableFont
+  (_ink, PangoRectangle _ _ _ tableFontHeight) <- liftIO $ layoutGetExtents stub
 
   -- Listing title
-  (_ink, PangoRectangle _ _ _ tableFontHeight) <- liftIO $ layoutGetExtents stub
   title <- liftIO $ layoutEmpty pangoCtxt
   _ <- liftIO $ layoutSetMarkup title $ fst titleFont ++ T.unpack (dds ^. description) ++ snd titleFont
   moveTo leftMargin topMargin
   showLayout title
+  (_ink, PangoRectangle _ _ _ titleHeight) <- liftIO $ layoutGetExtents title
+
+  -- Show totals
+  relMoveTo 0 (2 * titleHeight)
+  totalLayout <- liftIO $ layoutEmpty pangoCtxt
+  let debits_  = dds ^. debits
+      total    = sumOf (traverse.items.traverse.finalPrice) debits_
+      totalStr = fst tableFont ++ "Total: " ++ priceToString total ++ snd tableFont
+  _ <- liftIO $ layoutSetMarkup totalLayout totalStr
+  showLayout totalLayout
+  relMoveTo 0 tableFontHeight
+  numLayout <- liftIO $ layoutEmpty pangoCtxt
+  let numStr = fst tableFont ++ "Nombre d'alumnes: " ++ show (length debits_) ++ snd tableFont
+  _ <- liftIO $ layoutSetMarkup numLayout numStr
+  showLayout numLayout
 
   -- Table headers
-  (_ink, PangoRectangle _ _ _ titleHeight) <- liftIO $ layoutGetExtents title
   relMoveTo 0 (2 * titleHeight)
   forM_ [ ("Nom",        nameWidth,       AlignLeft) -- FIXME: take labels from Glade
         , ("Item",       itemWidth,       AlignLeft)
@@ -456,6 +470,10 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
   let renderDirectDebit :: Double -> Double -> [DirectDebit] -> Render ()
       renderDirectDebit _    _    []         = return ()
       renderDirectDebit xPos yPos (debit:ds) = do
+        let lineSep = 3
+
+        -- Debit layout preparation and extent computation
+
         nameLayout <- liftIO $ layoutEmpty pangoCtxt
         let name = T.unpack $ T.concat [debit ^. debtorLastName, ", ", debit ^. debtorFirstName]
         _ <- liftIO $ layoutSetMarkup nameLayout $ fst tableFont ++ name ++ snd tableFont
@@ -472,15 +490,22 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
             liftIO $ layoutSetWidth layout (Just width_)
             liftIO $ layoutSetAlignment layout align
             (_ink, PangoRectangle _ _ _ layoutHeight_) <- liftIO $ layoutGetExtents layout
-            return (layout, (width_, layoutHeight_ + 2))
+            return (layout, (width_, layoutHeight_ + lineSep))
           let itemHeight = maximum $ map (snd . snd) itemLayouts
           return (itemLayouts, itemHeight)
-        let debitHeight = max (nameHeight + 2) (sum (snd (unzip debitLayouts)))
+
+        -- Debit layout showing
+
+        let debitHeight = max (nameHeight + lineSep) (sum (snd (unzip debitLayouts)))
         (xPos, yPos) <- if yPos + debitHeight > maxYPos
                         then do showPage
                                 return (leftMargin, topMargin)
                         else    return (xPos, yPos)
         moveTo xPos yPos
+        -- rectangle xPos yPos 10 debitHeight
+        -- setSourceRGBA 0.8 0.8 0.8 0.5
+        -- fill
+        -- setSourceRGB 0 0 0
         showLayout nameLayout
         relMoveTo nameWidth 0
         forM_ debitLayouts $ \(itemLayouts, itemHeight) -> do
