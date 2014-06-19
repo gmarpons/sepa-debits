@@ -417,22 +417,27 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
   let printableWidth  = paperWidth - leftMargin - rightMargin
       maxYPos         = paperHeight - bottomMargin
       nameWidth       = 0.45 * printableWidth
-      itemWidth       = 0.15 * printableWidth
-      basePriceWidth  = 0.20 * printableWidth
-      finalPriceWidth = 0.20 * printableWidth
+      itemWidth       = 0.30 * printableWidth
+      basePriceWidth  = 0.13 * printableWidth
+      finalPriceWidth = 0.13 * printableWidth
+      xItem           = leftMargin + nameWidth
   let tableFont    = ("<span size=\"9000\">",     "</span>")
       titleFont    = ("<span size=\"11000\"><b>", "</b></span>")
       tableHdrFont = (fst tableFont ++ "<i>",     "</i>" ++ snd tableFont)
   stub <- liftIO $ layoutEmpty pangoCtxt
   _ <- liftIO $ layoutSetMarkup stub $ fst tableFont ++ "" ++ snd tableFont
+
+  -- Listing title
   (_ink, PangoRectangle _ _ _ tableFontHeight) <- liftIO $ layoutGetExtents stub
   title <- liftIO $ layoutEmpty pangoCtxt
   _ <- liftIO $ layoutSetMarkup title $ fst titleFont ++ T.unpack (dds ^. description) ++ snd titleFont
   moveTo leftMargin topMargin
   showLayout title
+
+  -- Table headers
   (_ink, PangoRectangle _ _ _ titleHeight) <- liftIO $ layoutGetExtents title
   relMoveTo 0 (2 * titleHeight)
-  forM_ [ ("Nom",        nameWidth,       AlignLeft)
+  forM_ [ ("Nom",        nameWidth,       AlignLeft) -- FIXME: take labels from Glade
         , ("Item",       itemWidth,       AlignLeft)
         , ("Preu base",  basePriceWidth,  AlignRight)
         , ("Preu final", finalPriceWidth, AlignRight)] $ \(text, width_, align) -> do
@@ -446,25 +451,47 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
   moveTo leftMargin (yPos + tableFontHeight)
   relLineTo printableWidth 0
   stroke
-  moveTo leftMargin (yPos + tableFontHeight + 4)
-  let fstDebit = head (dds ^. debits)
-  forM_ [ (T.unpack (fstDebit ^. debtorLastName),        nameWidth,       AlignLeft)
-        , ("Item",       itemWidth,       AlignLeft)
-        , ("Preu base",  basePriceWidth,  AlignRight)
-        , ("Preu final", finalPriceWidth, AlignRight)] $ \(text, width_, align) -> do
-    layout <- liftIO $ layoutEmpty pangoCtxt
-    _ <- liftIO $ layoutSetMarkup layout $ fst tableFont ++ text ++ snd tableFont
-    liftIO $ layoutSetWidth layout (Just width_)
-    liftIO $ layoutSetAlignment layout align
-    showLayout layout
-    relMoveTo width_ 0
 
-  -- forM_ (dds ^. debits) $ \debit -> do
-  --   renderDirectDebit leftMargin
-  showPage
+  -- Table contents
+  let renderDirectDebit :: Double -> Double -> [DirectDebit] -> Render ()
+      renderDirectDebit _    _    []         = return ()
+      renderDirectDebit xPos yPos (debit:ds) = do
+        nameLayout <- liftIO $ layoutEmpty pangoCtxt
+        let name = T.unpack $ T.concat [debit ^. debtorLastName, ", ", debit ^. debtorFirstName]
+        _ <- liftIO $ layoutSetMarkup nameLayout $ fst tableFont ++ name ++ snd tableFont
+        liftIO $ layoutSetWidth nameLayout (Just nameWidth)
+        liftIO $ layoutSetAlignment nameLayout AlignLeft
+        (_ink, PangoRectangle _ _ _ nameHeight) <- liftIO $ layoutGetExtents nameLayout
+        debitLayouts <- forM (debit ^.. items.traverse) $ \item_ -> do
+          itemLayouts <- forM [ (T.unpack      (item_ ^. longName),   itemWidth,       AlignLeft )
+                              , (priceToString (item_ ^. basePrice),  basePriceWidth,  AlignRight)
+                              , (priceToString (item_ ^. finalPrice), finalPriceWidth, AlignRight)]
+                         $ \(text, width_, align) -> do
+            layout <- liftIO $ layoutEmpty pangoCtxt
+            _ <- liftIO $ layoutSetMarkup layout $ fst tableFont ++ text ++ snd tableFont
+            liftIO $ layoutSetWidth layout (Just width_)
+            liftIO $ layoutSetAlignment layout align
+            (_ink, PangoRectangle _ _ _ layoutHeight_) <- liftIO $ layoutGetExtents layout
+            return (layout, (width_, layoutHeight_ + 2))
+          let itemHeight = maximum $ map (snd . snd) itemLayouts
+          return (itemLayouts, itemHeight)
+        let debitHeight = max (nameHeight + 2) (sum (snd (unzip debitLayouts)))
+        (xPos, yPos) <- if yPos + debitHeight > maxYPos
+                        then do showPage
+                                return (leftMargin, topMargin)
+                        else    return (xPos, yPos)
+        moveTo xPos yPos
+        showLayout nameLayout
+        relMoveTo nameWidth 0
+        forM_ debitLayouts $ \(itemLayouts, itemHeight) -> do
+          forM_ itemLayouts $ \(layout, (width_, _)) -> do
+            showLayout layout
+            relMoveTo width_ 0
+          (_, yPos) <- getCurrentPoint
+          moveTo xItem (yPos + itemHeight)
+        renderDirectDebit leftMargin (yPos + debitHeight) ds
 
--- renderDirectDebit :: PangoContext -> Double -> Double -> DirectDebit -> Render ()
--- renderDirectDebit pangoCtxt xPos yPos debit =
+  renderDirectDebit leftMargin (yPos + tableFontHeight + 4) (dds ^. debits)
 
 readItems :: DirectDebitsController -> IO [DirectDebit]
 readItems c = do
