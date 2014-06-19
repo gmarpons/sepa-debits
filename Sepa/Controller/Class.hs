@@ -262,7 +262,6 @@ mkControllerImpl db setMainWdState c = do
         forM_ [selector_]                     (`set` [widgetSensitive    := False])
         forM_ [editTb_, newTb_]               (`set` [widgetSensitive    := False])
         forM_ [deleteBt_]                     (`set` [widgetSensitive    := False])
-        forM_ editEntries_                    (`set` [widgetSensitive    := True, entryText := "" ])
         forM_ editWidgets_                    (`set` [widgetSensitive    := True ])
         forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
         forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
@@ -350,6 +349,7 @@ mkControllerImpl db setMainWdState c = do
     isActive <- toggleButtonGetActive newTb_
     when isActive $ do
       -- OLD: let s = guiNewItemToStrings gui
+      forM_ editEntries_ (`set` [widgetSensitive    := True, entryText := "" ])
       d <- readData editEntries_ c
       v <- validData d c
       setState (EditNew d v)
