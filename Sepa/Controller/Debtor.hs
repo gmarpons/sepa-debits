@@ -236,33 +236,26 @@ setMandatePanelState st c = do
   refEn            <- builderGetObject (builder c) castToEntry        "DE_mandateRefEn"
   signatureEn      <- builderGetObject (builder c) castToEntry        "DE_mandateSignatureEn"
   lastTimeActiveEn <- builderGetObject (builder c) castToEntry        "DE_mandateLastTimeActiveEn"
-  formBt_          <- getGladeObject               castToButton       "_mandateFormBt" c
   mandatesTv       <- getGladeObject               castToWidget       "_mandatesTv" c
   let dataWidgets = [iban1En, iban2En, iban3En, iban4En, iban5En, iban6En, refEn,
                      signatureEn, lastTimeActiveEn]
 
-  -- TODO: make sensitive formBt_ when active mandate present
   -- newBt is handled in Class.hs
   case st of
     NoSel       ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
                             forM_ dataWidgets                     (`set` [widgetSensitive    := False])
-                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
                             forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
     Sel _iter   ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
                             forM_ dataWidgets                     (`set` [widgetSensitive    := False])
-                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
                             forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
     EditNew _ _ ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
                             forM_ dataWidgets                     (`set` [widgetSensitive    := False])
-                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
                             forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
     EditOld _ _ ->       do forM_ [saveBt_, cancelBt_]            (`set` [widgetSensitive    := False])
                             forM_ dataWidgets                     (`set` [widgetSensitive    := False])
-                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
                             forM_ [mandatesTv]                    (`set` [widgetSensitive    := False])
     EditSub _it valid -> do forM_ [saveBt_]                       (`set` [widgetSensitive    := valid])
                             forM_ [cancelBt_]                     (`set` [widgetSensitive    := True ])
                             forM_ dataWidgets                     (`set` [widgetSensitive    := True ])
-                            forM_ [formBt_]                       (`set` [widgetSensitive    := False])
                             forM_ [mandatesTv]                    (`set` [widgetSensitive    := True ])
 
