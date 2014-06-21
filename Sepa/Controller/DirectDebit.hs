@@ -241,18 +241,20 @@ mkController' db setMainState c bcLs deLs = do
   _ <- on cloneBt buttonActivated $ do
     selector_ <- selector c
     incrementCreditorMessageCount db
-    mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
-    creditor_ <- case mCreditor of
-      Nothing        -> error "DirectDebitsController::mkController': no creditor"
-      Just creditorE -> return $ DB.entityVal creditorE
-    let description_ = T.concat [      T.filter (/= ' ') (creditor_ ^. fullName)
-                                , "_", T.pack (C.showGregorian today)
-                                , "_", T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
-                                ]
+    -- mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
+    -- creditor_ <- case mCreditor of
+    --   Nothing        -> error "DirectDebitsController::mkController': no creditor"
+    --   Just creditorE -> return $ DB.entityVal creditorE
+    -- let description_ = T.concat [      T.filter (/= ' ') (creditor_ ^. fullName)
+    --                             , "_", T.pack (C.showGregorian today)
+    --                             , "_", T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
+    --                             ]
+    -- dds <- getDirectDebitSet selector_
+    -- let debits_ = dds ^. debits
+    -- let newDdsV = mkDirectDebitSet description_ zonedTime creditor_ debits_
+    -- newDdsK <- flip DB.runMongoDBPoolDef db $ DB.insert newDdsV
     dds <- getDirectDebitSet selector_
-    let debits_ = dds ^. debits
-    let newDdsV = mkDirectDebitSet description_ zonedTime creditor_ debits_
-    newDdsK <- flip DB.runMongoDBPoolDef db $ DB.insert newDdsV
+    (newDdsK, newDdsV) <- DB.runMongoDBPoolDef (cloneDdsAction dds zonedTime) db
     listStorePrepend ls (DB.Entity newDdsK newDdsV)
     mNewIter <- treeModelGetIterFirst ls
     newIter <- case mNewIter of
@@ -523,7 +525,6 @@ readItems c = do
   let nameEq  (Item last1 fst1 _ _) (Item last2 fst2 _ _) = last1 == last2 && fst1 == fst2
       -- Lexicographic order, no need of a specific collation
       nameOrd = comparing (itemLastName &&& itemFirstName)
-                -- can be
   items_  <- listStoreToList (itemsLs c)
   let items' = (groupBy nameEq . sortBy nameOrd) items_
   forM items' $ \itL -> do
@@ -540,3 +541,42 @@ computeAndShowTotals debits_ c = do
   set basePriceEn  [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.basePrice)  debits_]
   set finalPriceEn [entryText := T.unpack . priceToText $ sumOf (traverse.items.traverse.finalPrice) debits_]
   set numberOfDebitsEn [entryText := show (length debits_)]
+
+cloneDdsAction :: (DB.PersistQuery m, DB.PersistMonadBackend m ~ DB.MongoBackend) =>
+                  DirectDebitSet
+               -> C.ZonedTime
+               -- -> [DB.Entity BillingConcept]
+               -- -> [DB.Entity Debtor]
+               -> m (DB.Key DirectDebitSet, DirectDebitSet)
+cloneDdsAction dds zonedTime = do
+  let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
+  mCreditor <- DB.selectFirst ([] :: [DB.Filter Creditor]) []
+  creditor_ <- case mCreditor of
+    Nothing        -> error "DirectDebitsController::mkController': no creditor"
+    Just creditorE -> return $ DB.entityVal creditorE
+  let description_ = T.concat [      T.filter (/= ' ') (creditor_ ^. fullName)
+                              , "_", T.pack (C.showGregorian today)
+                              , "_", T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
+                              ]
+  debtors <- DB.selectList ([] :: [DB.Filter Debtor]) []
+  -- WARNING: we don't update item prices (commented out) because it would reset items
+  -- with manually modified prices.
+  -- We index maps with unique keys for billing concepts and debtors
+  -- let bcsMap = M.fromList $ map (\(DB.Entity _ e) -> (e ^. longName, e)) bcs
+  let desMap = M.fromList $ map (\(DB.Entity _ e) -> ((e ^. firstName, e ^. lastName), e)) debtors
+  let oldDebits  = dds ^. debits
+  -- let oldItem2newMItem i = do   -- Maybe monad
+  --       mNewItem  <- M.lookup (i ^. longName) bcsMap
+  --       return $ i & basePrice .~ (mNewItem ^. basePrice) & vatRatio .~ (mNewItem ^. vatRatio)
+  let oldDebit2newMDebit d = do -- Maybe monad
+        mNewDebtor  <- M.lookup (d ^. debtorFirstName, d ^. debtorLastName) desMap
+        mNewMandate <- getActiveMandate today mNewDebtor
+        -- mNewItems <- case mapMaybe oldItem2newMItem (d ^. items) of
+        --   []      -> Nothing
+        --   items_  -> Just items_
+        -- return $ d & mandate .~ mNewMandate & items .~ mNewItems
+        return $ d & mandate .~ mNewMandate
+  let newDebits = mapMaybe oldDebit2newMDebit oldDebits
+  let newDdsV = mkDirectDebitSet description_ zonedTime creditor_ newDebits
+  newDdsK <- DB.insert newDdsV
+  return (newDdsK, newDdsV)
