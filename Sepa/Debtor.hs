@@ -25,7 +25,7 @@ module Sepa.Debtor
          lastTimeActive,
          isNew,
          validMandate,
-         updateMandateLastTimeActive,
+         updateMandatesLastTimeActive,
 
          -- SpanishBank
          mkSpanishBank,
@@ -41,6 +41,7 @@ import           ClassyPrelude
 import           Control.Lens
 import qualified Data.Char                as CH (isDigit, isUpper)
 import qualified Data.List                as LT
+import qualified Data.Map                 as M
 import qualified Data.Time.Calendar       as T
 import           Database.Persist         ((=.))
 import           Database.Persist.MongoDB (nestEq, (->.))
@@ -128,17 +129,30 @@ isNew = to _isNew
 _isNew :: Mandate -> Bool
 _isNew = isNothing . (^. lastTimeActive)
 
-updateMandateLastTimeActive :: DB.ConnectionPool -> Text -> T.Day -> IO ()
-updateMandateLastTimeActive db mandateRef_ newDay = do
-  mDebtorE <-flip DB.runMongoDBPoolDef db $
-             DB.selectFirst [Mandates ->. MandateRef `nestEq` mandateRef_] []
-  case mDebtorE of
-    Nothing                        -> error "updateMandateLastTimeActive: no debtor"
-    Just (DB.Entity debtorKey debtor) -> do
-      let mandates' = case debtor ^. mandates of
-            (m : ms) -> (m & lastTimeActive .~ Just newDay) : ms
-            []       -> error "updateMandateLastTimeActive: debtor with no mandates"
-      flip DB.runMongoDBPoolDef db $ DB.update debtorKey [Mandates =. mandates']
+--updateMandateLastTimeActive :: DB.ConnectionPool -> Text -> T.Day -> IO ()
+updateMandatesLastTimeActive mandateRefs newDay = do
+  debtors <- DB.selectList ([] :: [DB.Filter Debtor]) []
+  let mandateAL = concatMap (\(DB.Entity k d) -> fmap (\m -> (m ^. mandateRef, (k, d))) (d ^. mandates)) debtors
+  let debtorsMap = M.fromList mandateAL
+  forM_ mandateRefs $ \ref ->
+    case M.lookup ref debtorsMap of
+      Nothing     -> error "updateMandatesLastTimeActive: no debtor"
+      Just (k, d) -> do
+        let updateMandate m = if   m ^. mandateRef == ref
+                              then m & lastTimeActive .~ Just newDay
+                              else m
+        let mandates' = map updateMandate (d ^. mandates)
+        DB.update k [Mandates =. mandates']
+
+  -- forM_ mandateRefs $ \ref -> do
+  --   mDebtorE <- DB.selectFirst [Mandates ->. MandateRef `nestEq` ref] []
+  --   case mDebtorE of
+  --     Nothing                           -> error "updateMandateLastTimeActive: no debtor"
+  --     Just (DB.Entity debtorKey debtor) -> do
+  --       let mandates' = case debtor ^. mandates of
+  --             (m : ms) -> (m & lastTimeActive .~ Just newDay) : ms
+  --             []       -> error "updateMandateLastTimeActive: debtor with no mandates"
+  --       DB.update debtorKey [Mandates =. mandates']
 
 
 -- Spanish banks

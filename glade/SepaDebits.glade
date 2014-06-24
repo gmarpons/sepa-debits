@@ -1271,6 +1271,7 @@
     <property name="message_type">question</property>
     <property name="buttons">yes-no</property>
     <property name="text" translatable="yes">Has pogut enviar el fitxer al banc?</property>
+    <property name="secondary_text" translatable="yes">Realitza l'operació d'enviament abans de contestar. Un cop responguis, l'aplicació trigará uns segons en tornar a ser operativa.</property>
     <child internal-child="vbox">
       <object class="GtkBox" id="messagedialog-vbox8">
         <property name="can_focus">False</property>
