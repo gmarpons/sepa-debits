@@ -198,8 +198,12 @@ mkController' db setMainState c bcLs deLs = do
   -- debtors TreeView
 
   deTv   <- getGladeObject castToTreeView "_debtorsTv" c
+  let ibanFstMandate d = case d ^. mandates of
+        []    -> ""
+        (m:_) -> m ^. iban
   let deRf = [ T.unpack      . (^. lastName)   . DB.entityVal
              , T.unpack      . (^. firstName)  . DB.entityVal
+             , T.unpack      . ibanFstMandate  . DB.entityVal
              ]
   deFm   <- treeModelFilterNew deLs []
   zonedTime <- C.getZonedTime
@@ -241,18 +245,6 @@ mkController' db setMainState c bcLs deLs = do
   _ <- on cloneBt buttonActivated $ do
     selector_ <- selector c
     incrementCreditorMessageCount db
-    -- mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
-    -- creditor_ <- case mCreditor of
-    --   Nothing        -> error "DirectDebitsController::mkController': no creditor"
-    --   Just creditorE -> return $ DB.entityVal creditorE
-    -- let description_ = T.concat [      T.filter (/= ' ') (creditor_ ^. fullName)
-    --                             , "_", T.pack (C.showGregorian today)
-    --                             , "_", T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
-    --                             ]
-    -- dds <- getDirectDebitSet selector_
-    -- let debits_ = dds ^. debits
-    -- let newDdsV = mkDirectDebitSet description_ zonedTime creditor_ debits_
-    -- newDdsK <- flip DB.runMongoDBPoolDef db $ DB.insert newDdsV
     dds <- getDirectDebitSet selector_
     (newDdsK, newDdsV) <- DB.runMongoDBPoolDef (cloneDdsAction dds zonedTime) db
     listStorePrepend ls (DB.Entity newDdsK newDdsV)
@@ -332,6 +324,8 @@ mkController' db setMainState c bcLs deLs = do
         -- TODO: cheaper totals calculation (readItems needs to sort)
         debits_ <- readItems c
         computeAndShowTotals debits_ c
+
+  -- SEPA file generation
 
   fileBt <- getGladeObject castToButton "_fileBt" c
 

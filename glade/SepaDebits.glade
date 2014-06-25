@@ -708,6 +708,18 @@
                             </child>
                           </object>
                         </child>
+                        <child>
+                          <object class="GtkTreeViewColumn" id="treeviewcolumn19">
+                            <property name="sizing">autosize</property>
+                            <property name="title" translatable="yes">Compte</property>
+                            <property name="clickable">True</property>
+                            <property name="sort_indicator">True</property>
+                            <property name="sort_column_id">0</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="cellrenderertext20"/>
+                            </child>
+                          </object>
+                        </child>
                       </object>
                     </child>
                   </object>
