@@ -179,11 +179,26 @@ mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.Billing
               -> IO ()
 mkController' db setMainState c bcLs deLs = do
   (setState, stRef, ls, sm) <- mkController db setMainState c
-  let comp x y = T.collate (T.collator T.Current) (T.pack x) (T.pack y)
+  let comp a b = T.collate (T.collator T.Current) (T.pack a) (T.pack b)
   let orderings = repeat comp
 
   -- TODO: check if use of treeModelFilterRefilter necessary if deLs, bcLs change
-  -- TODO: Insert an empty dds in selector (not in the database)
+
+  -- Insert an empty dds in selector (not in the database)
+  -- TODO: Get description_ text from glade
+  zonedTime <- C.getZonedTime
+  let today        = C.localDay (C.zonedTimeToLocalTime zonedTime)
+  let description_ = "~ Facturació buida, sense càrrecs ~"
+  mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
+  emptyDds <- case mCreditor of
+    Nothing        -> error "DirectDebitsController::mkController': no creditor"
+    Just creditor_ ->
+      return $ mkDirectDebitSet description_ zonedTime (DB.entityVal creditor_) []
+  emptyDdsE <- flip DB.runMongoDBPoolDef db $ do
+    key <- DB.insert emptyDds
+    DB.delete key
+    return $ DB.Entity key emptyDds
+  listStorePrepend ls emptyDdsE
 
   -- billing concepts TreeView
 
@@ -208,8 +223,6 @@ mkController' db setMainState c bcLs deLs = do
              , T.unpack      . ibanFstMandate  . DB.entityVal
              ]
   deFm   <- treeModelFilterNew deLs []
-  zonedTime <- C.getZonedTime
-  let today  = C.localDay (C.zonedTimeToLocalTime zonedTime)
   treeModelFilterSetVisibleFunc deFm $ \iter -> do
     entity <- treeModelGetRow deLs iter
     return $ isJust (getActiveMandate today (DB.entityVal entity))
