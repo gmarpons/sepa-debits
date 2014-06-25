@@ -25,6 +25,7 @@ import           Sepa.Controller.Class
 import           Sepa.Controller.Debtor
 import           Sepa.Controller.DirectDebit
 import           Sepa.Controller.TreeView
+import           Sepa.Debtor
 
 main :: IO ()
 main = do
@@ -62,10 +63,23 @@ mkMainWindowGui builder_ db = do
   setTreeViewRenderers itTv itLs                        itRf
   setTreeViewSorting   itTv itLs Nothing itSm [compare] itRf
 
+  -- mandates TreeView
+  -- TODO: move maTv and maLs creation to another place
+
+  maTv <- builderGetObject builder_ castToTreeView "DE_mandatesTv"
+  maLs <- listStoreNew ([] :: [Mandate])
+  maSm <- treeModelSortNewWithModel maLs
+  let maRf = [ T.unpack      . (^. iban)
+--             , T.unpack      . itemFirstName
+             ]
+  treeViewSetModel     maTv              maSm
+  setTreeViewRenderers maTv maLs                        maRf
+  setTreeViewSorting   maTv maLs Nothing maSm [compare] maRf
+
   -- Create panel controllers and helper lists
 
   let bcController = BC "BC" builder_
-      deController = DE "DE" builder_
+      deController = DE "DE" builder_ maTv maLs maSm
       ddController = DD "DD" builder_ itTv itLs itSm
       controllers  = [ MkBController bcController
                      , MkBController deController

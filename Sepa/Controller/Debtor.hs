@@ -25,7 +25,14 @@ import           Sepa.Debtor
 import           Sepa.SpanishIban
 import qualified Text.Printf              as PF (printf)
 
-data DebtorsController = DE PanelId Builder
+data DebtorsController =
+  DE
+  { panelId_      :: PanelId
+  , builder_      :: Builder
+  , oldMandatesTv :: TreeView
+  , oldMandatesLs :: ListStore Mandate
+  , oldMandatesSm :: TypedTreeModelSort Mandate
+  }
 
 instance Controller DebtorsController where
 
@@ -37,9 +44,9 @@ instance Controller DebtorsController where
     DDE { lastNameD  :: T.Text
         , firstNameD :: T.Text }
 
-  builder  (DE _        builder_) = builder_
+  builder = builder_
 
-  panelId  (DE panelId_ _       ) = panelId_
+  panelId = panelId_
 
   selector = getGladeObject castToTreeView "_Tv"
 
@@ -92,6 +99,14 @@ instance Controller DebtorsController where
 
   selectElement it s sm _c = selectTreeViewElement it s sm
 
+  putElement' iter ls c = do
+    debtorE <- treeModelGetRow ls iter
+    listStoreClear (oldMandatesLs c)
+    let debtor = DB.entityVal debtorE
+    case debtor ^. mandates of
+      []              -> return ()
+      (_:oldMandates) -> mapM_ (listStoreAppend (oldMandatesLs c)) oldMandates
+
   putSubElement = putMandate
 
   mkSubElemController = mkMandateController
@@ -108,9 +123,6 @@ putMandate iter ls c = do
   iban4En          <- builderGetObject (builder c) castToEntry "DE_iban4En"
   iban5En          <- builderGetObject (builder c) castToEntry "DE_iban5En"
   iban6En          <- builderGetObject (builder c) castToEntry "DE_iban6En"
-  newTb_           <- builderGetObject (builder c) castToToggleButton "DE_mandateNewTb"
-  saveBt_          <- builderGetObject (builder c) castToButton "DE_saveMandateBt"
-  cancelBt_        <- builderGetObject (builder c) castToButton "DE_cancelMandateBt"
   refEn            <- builderGetObject (builder c) castToEntry "DE_mandateRefEn"
   signatureEn      <- builderGetObject (builder c) castToEntry "DE_mandateSignatureEn"
   lastTimeActiveEn <- builderGetObject (builder c) castToEntry "DE_mandateLastTimeActiveEn"
