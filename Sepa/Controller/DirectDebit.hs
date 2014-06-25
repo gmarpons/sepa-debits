@@ -180,7 +180,6 @@ mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.Billing
 mkController' db setMainState c bcLs deLs = do
   (setState, stRef, ls, sm) <- mkController db setMainState c
   let comp a b = T.collate (T.collator T.Current) (T.pack a) (T.pack b)
-  let orderings = repeat comp
 
   -- TODO: check if use of treeModelFilterRefilter necessary if deLs, bcLs change
 
@@ -210,7 +209,7 @@ mkController' db setMainState c bcLs deLs = do
              ]
   treeViewSetModel          bcTv              bcSm
   setTreeViewRenderers      bcTv bcLs                        bcRf
-  setTreeViewSorting        bcTv bcLs Nothing bcSm orderings bcRf
+  setTreeViewSorting        bcTv bcLs Nothing bcSm [comp]    bcRf
 
   -- debtors TreeView
 
@@ -228,8 +227,8 @@ mkController' db setMainState c bcLs deLs = do
     return $ isJust (getActiveMandate today (DB.entityVal entity))
   deSm  <- treeModelSortNewWithModel deFm
   treeViewSetModel           deTv                  deSm
-  setTreeViewRenderers       deTv deLs                            deRf
-  setTreeViewSorting         deTv deLs (Just deFm) deSm orderings deRf
+  setTreeViewRenderers       deTv deLs                                     deRf
+  setTreeViewSorting         deTv deLs (Just deFm) deSm (replicate 3 comp) deRf
 
   -- Visibility of extra buttons
 

@@ -47,7 +47,7 @@ instance Controller BillingConceptsController where
 
   setSelectorSorting s ls sm c = do
     let comp x y = T.collate (T.collator T.Current) (T.pack x) (T.pack y)
-    let orderings = repeat comp
+    let orderings = replicate 2 comp
     renderFuncs <- renderers c
     setTreeViewSorting s ls Nothing sm orderings renderFuncs
 

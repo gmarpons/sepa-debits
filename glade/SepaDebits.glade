@@ -57,10 +57,7 @@
                     <property name="resizable">True</property>
                     <property name="sizing">autosize</property>
                     <property name="title" translatable="yes">Preu base</property>
-                    <property name="clickable">True</property>
                     <property name="alignment">1</property>
-                    <property name="sort_indicator">True</property>
-                    <property name="sort_column_id">0</property>
                     <child>
                       <object class="GtkCellRendererText" id="cellrenderertext3">
                         <property name="xalign">1</property>
@@ -74,10 +71,7 @@
                     <property name="resizable">True</property>
                     <property name="sizing">autosize</property>
                     <property name="title" translatable="yes">% IVA</property>
-                    <property name="clickable">True</property>
                     <property name="alignment">1</property>
-                    <property name="sort_indicator">True</property>
-                    <property name="sort_column_id">0</property>
                     <child>
                       <object class="GtkCellRendererText" id="cellrenderertext4">
                         <property name="xalign">1</property>
@@ -91,10 +85,7 @@
                     <property name="resizable">True</property>
                     <property name="sizing">fixed</property>
                     <property name="title" translatable="yes">Preu final</property>
-                    <property name="clickable">True</property>
                     <property name="alignment">1</property>
-                    <property name="sort_indicator">True</property>
-                    <property name="sort_column_id">0</property>
                     <child>
                       <object class="GtkCellRendererText" id="cellrenderertext5">
                         <property name="xalign">1</property>
@@ -759,10 +750,7 @@
                           <object class="GtkTreeViewColumn" id="treeviewcolumn12">
                             <property name="sizing">autosize</property>
                             <property name="title" translatable="yes">Preu base</property>
-                            <property name="clickable">True</property>
                             <property name="alignment">1</property>
-                            <property name="sort_indicator">True</property>
-                            <property name="sort_column_id">0</property>
                             <child>
                               <object class="GtkCellRendererText" id="cellrenderertext13">
                                 <property name="xalign">1</property>
@@ -776,10 +764,7 @@
                             <property name="resizable">True</property>
                             <property name="sizing">fixed</property>
                             <property name="title" translatable="yes">Preu final</property>
-                            <property name="clickable">True</property>
                             <property name="alignment">1</property>
-                            <property name="sort_indicator">True</property>
-                            <property name="sort_column_id">0</property>
                             <child>
                               <object class="GtkCellRendererText" id="cellrenderertext15">
                                 <property name="xalign">1</property>
@@ -897,7 +882,6 @@
                             <property name="resizable">True</property>
                             <property name="sizing">autosize</property>
                             <property name="title" translatable="yes">Nom</property>
-                            <property name="sort_column_id">0</property>
                             <child>
                               <object class="GtkCellRendererText" id="cellrenderertext17"/>
                             </child>
