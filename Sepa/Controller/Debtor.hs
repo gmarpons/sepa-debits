@@ -14,6 +14,7 @@ import           Control.Monad
 import           Data.IORef
 import           Data.List
 import qualified Data.Text                as T (Text, pack, unpack)
+import qualified Data.Text.ICU            as T
 import qualified Data.Time.Calendar       as C
 import qualified Data.Time.LocalTime      as C
 import qualified Database.Persist.MongoDB as DB
@@ -57,7 +58,8 @@ instance Controller DebtorsController where
     setTreeViewRenderers s m renderFuncs
 
   setSelectorSorting s ls sm c = do
-    let orderings = repeat compare -- TODO: catalan collation
+    let comp x y = T.collate (T.collator T.Current) (T.pack x) (T.pack y)
+    let orderings = repeat comp
     renderFuncs <- renderers c
     setTreeViewSorting s ls Nothing sm orderings renderFuncs
 

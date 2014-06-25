@@ -19,6 +19,7 @@ import qualified Data.Map                          as M
 import           Data.Maybe
 import           Data.Ord
 import qualified Data.Text                         as T
+import qualified Data.Text.ICU                     as T
 import qualified Data.Time.Calendar                as C
 import qualified Data.Time.LocalTime               as C
 import qualified Database.Persist.MongoDB          as DB
@@ -178,9 +179,10 @@ mkController' :: (TreeModelClass (bcModel (DB.Entity Sepa.BillingConcept.Billing
               -> IO ()
 mkController' db setMainState c bcLs deLs = do
   (setState, stRef, ls, sm) <- mkController db setMainState c
-  let orderings = repeat compare -- TODO: catalan collation
+  let comp x y = T.collate (T.collator T.Current) (T.pack x) (T.pack y)
+  let orderings = repeat comp
 
-  -- FIXME: use treeModelFilterRefilter every time deLs and bcLs could have changed
+  -- TODO: check if use of treeModelFilterRefilter necessary if deLs, bcLs change
   -- TODO: Insert an empty dds in selector (not in the database)
 
   -- billing concepts TreeView

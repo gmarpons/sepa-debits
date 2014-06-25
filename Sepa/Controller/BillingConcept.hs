@@ -11,6 +11,7 @@ module Sepa.Controller.BillingConcept where
 import           Control.Lens             hiding (element, elements, index, set, view)
 import           Data.List
 import qualified Data.Text                as T (Text, pack, replace, strip, unpack)
+import qualified Data.Text.ICU            as T
 import qualified Data.Text.Lazy           as TL (unpack)
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
@@ -45,7 +46,8 @@ instance Controller BillingConceptsController where
     setTreeViewRenderers s m renderFuncs
 
   setSelectorSorting s ls sm c = do
-    let orderings = repeat compare -- TODO: catalan collation
+    let comp x y = T.collate (T.collator T.Current) (T.pack x) (T.pack y)
+    let orderings = repeat comp
     renderFuncs <- renderers c
     setTreeViewSorting s ls Nothing sm orderings renderFuncs
 

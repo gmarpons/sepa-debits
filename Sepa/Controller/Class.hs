@@ -193,9 +193,6 @@ mkControllerImpl :: forall c sm . (Controller c, TreeModelSortClass sm, sm ~ Typ
                     DB.ConnectionPool -> (MainWindowState -> IO ()) -> c
                  -> IO (PanelState c -> IO (), IORef (PanelState c), LS c, sm)
 mkControllerImpl db setMainWdState c = do
-
-  -- FIXME: NoSel -> newTb -> Cannot save
-
   selector_  <- selector c
   e          <- elements db c
   ls         <- listStoreNew e
