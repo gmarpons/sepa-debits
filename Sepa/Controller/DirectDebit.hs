@@ -595,3 +595,6 @@ cloneDdsAction dds zonedTime = do
   let newDdsV = mkDirectDebitSet description_ zonedTime creditor_ newDebits
   newDdsK <- DB.insert newDdsV
   return (newDdsK, newDdsV)
+
+-- TODO: set selection on treeview when creating new item
+-- TODO: initially sort tables by name

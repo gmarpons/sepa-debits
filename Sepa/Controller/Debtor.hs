@@ -160,7 +160,7 @@ mkMandateController  :: (TreeModelSortClass sm) =>
                      -> (PanelState c -> IO ())
                      -> DebtorsController
                      -> IO ()
-mkMandateController ls _sm db stRef setPanelState c = do
+mkMandateController ls sm db stRef setPanelState c = do
   iban1En          <- builderGetObject (builder c) castToEntry        "DE_iban1En"
   iban2En          <- builderGetObject (builder c) castToEntry        "DE_iban2En"
   iban3En          <- builderGetObject (builder c) castToEntry        "DE_iban3En"
@@ -224,14 +224,20 @@ mkMandateController ls _sm db stRef setPanelState c = do
     flip DB.runMongoDBPoolDef db $ DB.replace key newDebtor
     let index = listStoreIterToIndex iter
     listStoreSetValue ls index (DB.Entity key newDebtor)
-    setPanelState (Sel iter)
+    debtorsTreeView  <- selector c
+    selection <- treeViewGetSelection debtorsTreeView
+    childPath <- treeModelGetPath ls iter
+    path      <- treeModelSortConvertChildPathToPath sm childPath
+    treeSelectionUnselectPath selection path
+    treeSelectionSelectPath   selection path -- Indirectly changes state
 
   _ <- on cancelBt_ buttonActivated $ do
     forM_ handlers signalBlock
     (EditSub iter _valid) <- readIORef stRef -- FIXME: unsafe pattern
     debtorsTreeView  <- selector c
     selection <- treeViewGetSelection debtorsTreeView
-    path <- treeModelGetPath ls iter
+    childPath <- treeModelGetPath ls iter
+    path      <- treeModelSortConvertChildPathToPath sm childPath
     treeSelectionUnselectPath selection path
     treeSelectionSelectPath   selection path -- Indirectly changes state
 
