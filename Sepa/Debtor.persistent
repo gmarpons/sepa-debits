@@ -4,6 +4,7 @@ Debtor                        sql=debtors
   mandates                    [Mandate]
   registrationDate            T.Day               -- Immutable
   deriving Eq Read Show
+  -- We can have repeated (firstName, lastName)
 
 
 Mandate                       sql=mandates
