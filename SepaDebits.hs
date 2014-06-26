@@ -70,7 +70,7 @@ mkMainWindowGui builder_ db = do
   maLs <- listStoreNew ([] :: [Mandate])
   maSm <- treeModelSortNewWithModel maLs
   let maRf = [ T.unpack      . (^. iban)
---             , T.unpack      . itemFirstName
+             , maybe "" show . (^. lastTimeActive)
              ]
   treeViewSetModel     maTv              maSm
   setTreeViewRenderers maTv maLs                        maRf
