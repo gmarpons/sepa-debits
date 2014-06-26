@@ -349,8 +349,9 @@ mkController' db setMainState c bcLs deLs = do
     let dds = DB.entityVal ddsE
     banks <- flip DB.runMongoDBPoolDef db $ DB.selectList ([] :: [DB.Filter SpanishBank]) []
     let banksMap = M.fromList $ map (\e -> (DB.entityVal e ^. fourDigitsCode, DB.entityVal e)) banks
-    fileChsDg     <- getGladeObject castToFileChooserDialog "_fileChooserDg" c
-    isSentDg      <- getGladeObject castToDialog            "_isSentDg"      c
+    fileChsDg        <- getGladeObject castToFileChooserDialog "_fileChooserDg"    c
+    isSentDg         <- getGladeObject castToDialog            "_isSentDg"         c
+    writeFileErrorDg <- getGladeObject castToDialog            "_writeFileErrorDg" c
     fileChooserSetCurrentName fileChsDg $ T.unpack (dds ^. description) ++ ".xml"
     widgetShow fileChsDg
     fileChsResp <- dialogRun fileChsDg
@@ -362,20 +363,26 @@ mkController' db setMainState c bcLs deLs = do
         case mFilePath of
           Nothing       -> error "No file name"
           Just filePath -> do
-            -- FIXME: handle file writing IO error
-            writeMessageToFile dds banksMap (ClassyPrelude.fromString filePath)
-            widgetShow isSentDg
-            isSentResp <- dialogRun isSentDg
-            widgetHide isSentDg
-            case isSentResp of
-              ResponseYes -> do
-                -- Update lastTimeActive for all mandates used in dds
-                -- TODO: update mandate info in debtors panel
-                let ddsDay = C.localDay (C.zonedTimeToLocalTime (dds ^. creationTime))
-                let mandateRefs = dds ^.. debits . traverse . mandate . mandateRef
-                DB.runMongoDBPoolDef (updateMandatesLastTimeActive mandateRefs ddsDay) db
-              ResponseNo  -> return ()
-              _           -> error "Bad response on isSentDg"
+            (eWritten :: Either ClassyPrelude.IOException ())
+              <- ClassyPrelude.try $ writeMessageToFile dds banksMap (ClassyPrelude.fromString filePath)
+            case eWritten of
+              Right () -> do
+                widgetShow isSentDg
+                isSentResp <- dialogRun isSentDg
+                widgetHide isSentDg
+                case isSentResp of
+                  ResponseYes -> do
+                    -- Update lastTimeActive for all mandates used in dds
+                    -- TODO: update mandate info in debtors panel
+                    let ddsDay = C.localDay (C.zonedTimeToLocalTime (dds ^. creationTime))
+                    let mandateRefs = dds ^.. debits . traverse . mandate . mandateRef
+                    DB.runMongoDBPoolDef (updateMandatesLastTimeActive mandateRefs ddsDay) db
+                  ResponseNo  -> return ()
+                  _           -> error "Bad response on isSentDg"
+              Left _e  -> do
+                widgetShow writeFileErrorDg
+                _ <- dialogRun writeFileErrorDg
+                widgetHide writeFileErrorDg
       ResponseDeleteEvent  -> return ()
       _                    -> error "Bad response on file chooser"
 
