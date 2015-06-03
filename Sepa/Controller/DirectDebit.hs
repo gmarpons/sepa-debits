@@ -1,7 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
@@ -187,7 +186,7 @@ mkController' db setMainState c bcLs deLs = do
   -- TODO: Get description_ text from glade
   zonedTime <- C.getZonedTime
   let today        = C.localDay (C.zonedTimeToLocalTime zonedTime)
-  let description_ = "~ Facturació buida, sense càrrecs ~"
+  let description_ = T.pack "~ Facturació buida, sense càrrecs ~"
   mCreditor <- flip DB.runMongoDBPoolDef db $ DB.selectFirst ([] :: [DB.Filter Creditor]) []
   emptyDds <- case mCreditor of
     Nothing        -> error "DirectDebitsController::mkController': no creditor"
@@ -216,10 +215,10 @@ mkController' db setMainState c bcLs deLs = do
   deTv   <- getGladeObject castToTreeView "_debtorsTv" c
   let ibanFstMandate d = case d ^. mandates of
         []    -> ""
-        (m:_) -> m ^. iban
+        (m:_) -> T.unpack $ m ^. iban
   let deRf = [ T.unpack      . (^. lastName)   . DB.entityVal
              , T.unpack      . (^. firstName)  . DB.entityVal
-             , T.unpack      . ibanFstMandate  . DB.entityVal
+             ,                 ibanFstMandate  . DB.entityVal
              ]
   deFm   <- treeModelFilterNew deLs []
   treeModelFilterSetVisibleFunc deFm $ \iter -> do
@@ -442,12 +441,12 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
       titleFont    = ("<span size=\"11000\"><b>", "</b></span>")
       tableHdrFont = (fst tableFont ++ "<i>",     "</i>" ++ snd tableFont)
   stub <- liftIO $ layoutEmpty pangoCtxt
-  _ <- liftIO $ layoutSetMarkup stub $ fst tableFont ++ "" ++ snd tableFont
+  (_ :: String) <- liftIO $ layoutSetMarkup stub $ fst tableFont ++ "" ++ snd tableFont
   (_ink, PangoRectangle _ _ _ tableFontHeight) <- liftIO $ layoutGetExtents stub
 
   -- Listing title
   title <- liftIO $ layoutEmpty pangoCtxt
-  _ <- liftIO $ layoutSetMarkup title $ fst titleFont ++ T.unpack (dds ^. description) ++ snd titleFont
+  (_ :: String) <- liftIO $ layoutSetMarkup title $ fst titleFont ++ T.unpack (dds ^. description) ++ snd titleFont
   moveTo leftMargin topMargin
   showLayout title
   (_ink, PangoRectangle _ _ _ titleHeight) <- liftIO $ layoutGetExtents title
@@ -458,12 +457,12 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
   let debits_  = dds ^. debits
       total    = sumOf (traverse.items.traverse.finalPrice) debits_
       totalStr = fst tableFont ++ "Total: " ++ priceToString total ++ snd tableFont
-  _ <- liftIO $ layoutSetMarkup totalLayout totalStr
+  (_ :: String) <- liftIO $ layoutSetMarkup totalLayout totalStr
   showLayout totalLayout
   relMoveTo 0 tableFontHeight
   numLayout <- liftIO $ layoutEmpty pangoCtxt
   let numStr = fst tableFont ++ "Nombre d'alumnes: " ++ show (length debits_) ++ snd tableFont
-  _ <- liftIO $ layoutSetMarkup numLayout numStr
+  (_ :: String) <- liftIO $ layoutSetMarkup numLayout numStr
   showLayout numLayout
 
   -- Table headers
@@ -473,7 +472,7 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
         , ("Preu base",  basePriceWidth,  AlignRight)
         , ("Preu final", finalPriceWidth, AlignRight)] $ \(text, width_, align) -> do
     layout <- liftIO $ layoutEmpty pangoCtxt
-    _ <- liftIO $ layoutSetMarkup layout $ fst tableHdrFont ++ text ++ snd tableHdrFont
+    (_ :: String) <- liftIO $ layoutSetMarkup layout $ fst tableHdrFont ++ text ++ snd tableHdrFont
     liftIO $ layoutSetWidth layout (Just width_)
     liftIO $ layoutSetAlignment layout align
     showLayout layout
@@ -492,8 +491,8 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
         -- Debit layout preparation and extent computation
 
         nameLayout <- liftIO $ layoutEmpty pangoCtxt
-        let name = T.unpack $ T.concat [debit ^. debtorLastName, ", ", debit ^. debtorFirstName]
-        _ <- liftIO $ layoutSetMarkup nameLayout $ fst tableFont ++ name ++ snd tableFont
+        let name = T.unpack $ T.concat [debit ^. debtorLastName, T.pack ", ", debit ^. debtorFirstName]
+        (_ :: String) <- liftIO $ layoutSetMarkup nameLayout $ fst tableFont ++ name ++ snd tableFont
         liftIO $ layoutSetWidth nameLayout (Just nameWidth)
         liftIO $ layoutSetAlignment nameLayout AlignLeft
         (_ink, PangoRectangle _ _ _ nameHeight) <- liftIO $ layoutGetExtents nameLayout
@@ -503,7 +502,7 @@ renderDirectDebitSet pangoCtxt pageSetup dds = do
                               , (priceToString (item_ ^. finalPrice), finalPriceWidth, AlignRight)]
                          $ \(text, width_, align) -> do
             layout <- liftIO $ layoutEmpty pangoCtxt
-            _ <- liftIO $ layoutSetMarkup layout $ fst tableFont ++ text ++ snd tableFont
+            (_ :: String) <- liftIO $ layoutSetMarkup layout $ fst tableFont ++ text ++ snd tableFont
             liftIO $ layoutSetWidth layout (Just width_)
             liftIO $ layoutSetAlignment layout align
             (_ink, PangoRectangle _ _ _ layoutHeight_) <- liftIO $ layoutGetExtents layout
@@ -570,8 +569,8 @@ cloneDdsAction dds zonedTime = do
     Nothing        -> error "DirectDebitsController::mkController': no creditor"
     Just creditorE -> return $ DB.entityVal creditorE
   let description_ = T.concat [      T.filter (/= ' ') (creditor_ ^. fullName)
-                              , "_", T.pack (C.showGregorian today)
-                              , "_", T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
+                              , T.pack "_", T.pack (C.showGregorian today)
+                              , T.pack "_", T.pack (PF.printf "%04d" (creditor_ ^. messageCount))
                               ]
   debtors <- DB.selectList ([] :: [DB.Filter Debtor]) []
   -- WARNING: we don't update item prices (commented out) because it would reset items

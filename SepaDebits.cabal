@@ -13,7 +13,7 @@ copyright:              Copyright (C) 2014 Guillem Marpons
 category:               ERP
 stability:              experimental
 build-type:             Simple
-cabal-version:          >=1.10
+cabal-version:          >= 1.18
 
 library
   exposed-modules:      Sepa.BillingConcept,
@@ -29,35 +29,39 @@ library
                         Sepa.MongoUtils,
                         Sepa.SpanishIban,
                         Sepa.CsvImport
+
+  -- Need to manually do
+  -- # cabal install alex happy
+  -- # cabal install gtk2hs-buildtools
+  -- # cabal install Cabal
   build-depends:        base                    >= 4.5      && < 5,
-                        bytestring              == 0.9.*,
-                        cairo                   == 0.12.5.*,
-                        cassava                 == 0.3.*,
-                        classy-prelude          >= 0.8.0.1  && < 0.8.1,
-                        containers              >= 0.4.2.1  && < 0.5,
-                        conduit                 == 1.0.*,
-                        formatting              == 3.1.*,
-                        glib                    >= 0.12.5.3 && < 0.13,
-                        gtk3                    >= 0.12.5.6 && < 0.13,
-                        iconv                   == 0.4.*,
-                        lens                    >= 4.0.5    && < 5,
-                        monad-control           == 0.3.*,
-                        mongoDB                 >= 1.4.4    && < 1.5,
-                        network                 == 2.4.*,
-                        pango                   == 0.12.5.*,
+                        bytestring              >= 0.9,
+                        cairo,
+                        cassava                 >= 0.3,
+                        classy-prelude          >= 0.8.0.1,
+                        containers              >= 0.4.2.1,
+                        conduit                 >= 1.0,
+                        formatting              >= 3.1,
+                        glib,
+                        gtk3                    == 0.13.*,
+                        iconv                   >= 0.4,
+                        lens                    >= 4.0.5,
+                        monad-control           >= 0.3,
+                        mongoDB                 == 1.4.4.*,
+                        network                 >= 2.4,
+                        pango,
                         persistent              == 1.3.*,
                         persistent-mongoDB      == 1.3.*,
                         persistent-template     == 1.3.*,
-                        resourcet               >= 0.4.10   && < 0.5,
-                        text                    == 0.11.*,
-                        text-icu                == 0.6.3.*,
-                        template-haskell        == 2.7.*,
-                        time                    == 1.4.*,
-                        transformers            == 0.3.*,
-                        xml                     >= 1.3.13   && < 1.4,
-                        xml-conduit             >= 1.1.0.9  && < 1.2
+                        resourcet               >= 0.4.10,
+                        text                    >= 0.11,
+                        text-icu                >= 0.6.3,
+                        template-haskell        >= 2.7,
+                        time                    >= 1.4,
+                        transformers            >= 0.3,
+                        xml                     >= 1.3.13,
+                        xml-conduit             >= 1.1.0.9
   default-language:     Haskell2010
-  default-extensions:   OverloadedStrings
   other-extensions:     NoImplicitPrelude,
                         TemplateHaskell
   ghc-options:          -threaded
@@ -78,34 +82,33 @@ executable sepa-debits
                         Sepa.SpanishIban
   build-depends:        sepa-debits,
                         base                    >= 4.5      && < 5,
-                        bytestring              == 0.9.*,
-                        cairo                   == 0.12.5.*,
-                        cassava                 == 0.3.*,
-                        classy-prelude          >= 0.8.0.1  && < 0.8.1,
-                        containers              >= 0.4.2.1  && < 0.5,
-                        conduit                 == 1.0.*,
-                        formatting              == 3.1.*,
-                        glib                    >= 0.12.5.3 && < 0.13,
-                        gtk3                    >= 0.12.5.6 && < 0.13,
-                        iconv                   == 0.4.*,
-                        lens                    >= 4.0.5    && < 5,
-                        monad-control           == 0.3.*,
-                        mongoDB                 >= 1.4.4    && < 1.5,
-                        network                 == 2.4.*,
-                        pango                   == 0.12.5.*,
+                        bytestring              >= 0.9,
+                        cairo,
+                        cassava                 >= 0.3,
+                        classy-prelude          >= 0.8.0.1,
+                        containers              >= 0.4.2.1,
+                        conduit                 >= 1.0,
+                        formatting              >= 3.1,
+                        glib,
+                        gtk3                    == 0.13.*,
+                        iconv                   >= 0.4,
+                        lens                    >= 4.0.5,
+                        monad-control           >= 0.3,
+                        mongoDB                 == 1.4.4.*,
+                        network                 >= 2.4,
+                        pango,
                         persistent              == 1.3.*,
                         persistent-mongoDB      == 1.3.*,
                         persistent-template     == 1.3.*,
-                        resourcet               >= 0.4.10   && < 0.5,
-                        text                    == 0.11.*,
-                        text-icu                == 0.6.3.*,
-                        template-haskell        == 2.7.*,
-                        time                    == 1.4.*,
-                        transformers            == 0.3.*,
-                        xml                     >= 1.3.13   && < 1.4,
-                        xml-conduit             >= 1.1.0.9  && < 1.2
+                        resourcet               >= 0.4.10,
+                        text                    >= 0.11,
+                        text-icu                >= 0.6.3,
+                        template-haskell        >= 2.7,
+                        time                    >= 1.4,
+                        transformers            >= 0.3,
+                        xml                     >= 1.3.13,
+                        xml-conduit             >= 1.1.0.9
   default-language:     Haskell2010
-  default-extensions:   OverloadedStrings
   other-extensions:     NoImplicitPrelude,
                         TemplateHaskell
   ghc-options:          -threaded

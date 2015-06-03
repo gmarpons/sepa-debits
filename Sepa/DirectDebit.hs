@@ -95,14 +95,14 @@ storableDebits debits_ =
   && all (not . null) (debits_ ^.. traversed.items)
   where allMandateRefs = debits_ ^.. traversed.mandate.mandateRef
 
-creationDay :: (Gettable f, Conjoined p) =>
+creationDay :: (Contravariant f, Functor f, Conjoined p) =>
                p T.Day (f T.Day) -> p DirectDebitSet (f DirectDebitSet)
 creationDay = to _creationDay
 
 _creationDay :: DirectDebitSet -> T.Day
 _creationDay col = T.localDay (T.zonedTimeToLocalTime (col ^. creationTime))
 
-creationTimeOfDay :: (Gettable f, Conjoined p) =>
+creationTimeOfDay :: (Contravariant f, Functor f, Conjoined p) =>
                      p T.TimeOfDay (f T.TimeOfDay) -> p DirectDebitSet (f DirectDebitSet)
 creationTimeOfDay = to _creationTimeOfDay
 

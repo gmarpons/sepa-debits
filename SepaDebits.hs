@@ -1,7 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
@@ -14,7 +13,7 @@ import           Control.Lens             hiding (set)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.IORef
-import qualified Data.Text                as T (unpack)
+import qualified Data.Text                as T (pack, unpack)
 import qualified Data.Time.Clock          as C (NominalDiffTime)
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
@@ -38,7 +37,7 @@ main = do
   mainGUI
     where
       gladeFile  = "glade/SepaDebits.glade"
-      dbName     = "sepadebits" :: DB.Database
+      dbName     = (T.pack "sepadebits") :: DB.Database
       hostName   = "localhost" :: DB.HostName
       port       = N.PortNumber 27017 :: N.PortID -- Standard MongoDB port
       poolSize   = 10                             -- Num. of stripes

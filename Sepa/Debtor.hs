@@ -123,7 +123,7 @@ validMandate ref iban_ _signatureDate_ _lastTimeActive_ =
      length ref == 35 && all (\c -> CH.isDigit c || c == ' ') ref
   && validSpanishIban iban_
 
-isNew :: (Gettable f, Conjoined p) => p Bool (f Bool) -> p Mandate (f Mandate)
+isNew :: (Contravariant f, Functor f, Conjoined p) => p Bool (f Bool) -> p Mandate (f Mandate)
 isNew = to _isNew
 
 _isNew :: Mandate -> Bool

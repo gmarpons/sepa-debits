@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
-{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 
@@ -9,6 +8,7 @@ module Sepa.Controller.Class where
 import           Control.Monad
 import           Data.Char                (isDigit)
 import           Data.IORef
+import qualified Data.Text as T
 import qualified Database.Persist.MongoDB as DB
 import           Graphics.UI.Gtk
 
@@ -173,7 +173,7 @@ class (DB.PersistEntity (E c), DB.PersistEntityBackend (E c) ~ DB.MongoBackend, 
     val   <- createFromData data_ db c
     key   <- flip DB.runMongoDBPoolDef db $ DB.insert val -- FIXME: check unique constraints
     index <- listStoreAppend ls (DB.Entity key val)
-    let treePath = stringToTreePath (show index)
+    let treePath = stringToTreePath (T.pack (show index))
     Just iter <- treeModelGetIter ls treePath
     return iter
 
@@ -346,7 +346,7 @@ mkControllerImpl db setMainWdState c = do
     isActive <- toggleButtonGetActive newTb_
     when isActive $ do
       -- OLD: let s = guiNewItemToStrings gui
-      forM_ editEntries_ (`set` [widgetSensitive    := True, entryText := "" ])
+      forM_ editEntries_ (`set` [widgetSensitive    := True, entryText := ""])
       d <- readData editEntries_ c
       v <- validData d c
       setState (EditNew d v)

@@ -12,7 +12,7 @@ module Sepa.SpanishIban
        ) where
 
 import           ClassyPrelude
-import qualified Control.Lens   as L (Conjoined, Gettable, to)
+import qualified Control.Lens   as L (Conjoined, Contravariant, to)
 import qualified Data.Char      as CH (digitToInt, intToDigit, isDigit)
 import qualified Data.Text.Read as TXT (decimal)
 import qualified Text.Printf    as PF (printf)
@@ -21,7 +21,7 @@ import qualified Text.Printf    as PF (printf)
 type IBAN = Text
 
 -- | Getter for the four digits code for banks.
-bankDigits :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
+bankDigits :: (L.Contravariant f, Functor f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
 bankDigits = L.to _bankDigits
 
 _bankDigits :: Text -> Text
@@ -30,7 +30,7 @@ _bankDigits iban = assert (validSpanishIban iban) bankDigits_
         (bankDigits_, _)        = splitAt 4 ccc
 
 -- | Getter for the four digits code for bank offices.
-officeDigits :: (L.Gettable f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
+officeDigits :: (L.Contravariant f, Functor f, L.Conjoined p) => p Text (f Text) -> p Text (f Text)
 officeDigits = L.to _officeDigits
 
 _officeDigits :: Text -> Text
